@@ -107,7 +107,7 @@ String HTTPout;
 
 void next(void)
 { P = data[IP>>2];
-  IP += 4; 
+  IP += 4;
   WP = P+4;  }
 
 void accep()
@@ -126,8 +126,8 @@ void txsto(void)
 {  Serial.write( (unsigned char) top);
    char c=top;
    HTTPout += c ;
-   pop; 
-} 
+   pop;
+}
 
 void docon(void)
 {  push data[WP>>2]; }
@@ -139,7 +139,7 @@ void dolit(void)
 
 void dolist(void)
 {   rack[(unsigned char)++R] = IP;
-  IP = WP; 
+  IP = WP;
   next(); }
 
 void exitt(void)
@@ -154,17 +154,17 @@ void execu(void)
 void donext(void)
 {   if(rack[(unsigned char)R]) {
     rack[(unsigned char)R] -= 1 ;
-    IP = data[IP>>2]; 
+    IP = data[IP>>2];
   } else { IP += 4;  (unsigned char)R-- ;  }
   next(); }
 
 void qbran(void)
-{   if(top == 0) IP = data[IP>>2]; 
-  else IP += 4;  pop; 
+{   if(top == 0) IP = data[IP>>2];
+  else IP += 4;  pop;
   next(); }
 
 void bran(void)
-{   IP = data[IP>>2]; 
+{   IP = data[IP>>2];
   next(); }
 
 void store(void)
@@ -224,10 +224,10 @@ void xorr(void)
 
 void uplus(void)
 {   stack[(unsigned char)S] += top;
-  top = LOWER(stack[(unsigned char)S], top);  } 
+  top = LOWER(stack[(unsigned char)S], top);  }
 
 void nop(void)
-{   next(); } 
+{   next(); }
 
 void qdup(void)
 {   if(top) stack[(unsigned char)++S] = top ;  }
@@ -256,7 +256,7 @@ void negat(void)
 void dnega(void)
 {   inver();
   tor();
-  inver(); 
+  inver();
   push 1;
   uplus();
   rfrom();
@@ -406,10 +406,10 @@ void freq(void)
 
 void (*primitives[72])(void) = {
     /* case 0 */ nop,
-    /* case 1 */ accep, 
-    /* case 2 */ qrx,    
-    /* case 3 */ txsto,  
-    /* case 4 */ docon,   
+    /* case 1 */ accep,
+    /* case 2 */ qrx,
+    /* case 3 */ txsto,
+    /* case 4 */ docon,
     /* case 5 */ dolit,
     /* case 6 */ dolist,
     /* case 7 */ exitt,
@@ -426,7 +426,7 @@ void (*primitives[72])(void) = {
     /* case 18 */ rfrom,
     /* case 19 */ rat,
     /* case 20 */ tor,
-    /* case 21 */ nop, 
+    /* case 21 */ nop,
     /* case 22 */ nop,
     /* case 23 */ drop,
     /* case 24 */ dup,
@@ -437,55 +437,55 @@ void (*primitives[72])(void) = {
     /* case 29 */ orr,
     /* case 30 */ xorr,
     /* case 31 */ uplus,
-    /* case 32 */ next, 
-    /* case 33 */ qdup, 
-    /* case 34 */ rot, 
-    /* case 35 */ ddrop, 
-    /* case 36 */ ddup, 
+    /* case 32 */ next,
+    /* case 33 */ qdup,
+    /* case 34 */ rot,
+    /* case 35 */ ddrop,
+    /* case 36 */ ddup,
     /* case 37 */ plus,
-    /* case 38 */ inver, 
-    /* case 39 */ negat, 
-    /* case 40 */ dnega, 
-    /* case 41 */ subb, 
+    /* case 38 */ inver,
+    /* case 39 */ negat,
+    /* case 40 */ dnega,
+    /* case 41 */ subb,
     /* case 42 */ abss,
-    /* case 43 */ equal, 
-    /* case 44 */ uless, 
-    /* case 45 */ less,   
+    /* case 43 */ equal,
+    /* case 44 */ uless,
+    /* case 45 */ less,
     /* case 46 */ ummod,
     /* case 47 */ msmod,
-    /* case 48 */ slmod, 
-    /* case 49 */ mod,  
-    /* case 50 */ slash, 
-    /* case 51 */ umsta,   
-    /* case 52 */ star, 
-    /* case 53 */ mstar, 
-    /* case 54 */ ssmod, 
-    /* case 55 */ stasl, 
-    /* case 56 */ pick, 
-    /* case 57 */ pstor, 
-    /* case 58 */ dstor, 
-    /* case 59 */ dat, 
-    /* case 60 */ count, 
-    /* case 61 */ dovar, 
-    /* case 62 */ maxx, 
+    /* case 48 */ slmod,
+    /* case 49 */ mod,
+    /* case 50 */ slash,
+    /* case 51 */ umsta,
+    /* case 52 */ star,
+    /* case 53 */ mstar,
+    /* case 54 */ ssmod,
+    /* case 55 */ stasl,
+    /* case 56 */ pick,
+    /* case 57 */ pstor,
+    /* case 58 */ dstor,
+    /* case 59 */ dat,
+    /* case 60 */ count,
+    /* case 61 */ dovar,
+    /* case 62 */ maxx,
     /* case 63 */ minn,
     /* case 64 */ audio,
     /* case 65 */ sendPacket,
     /* case 66 */ poke,
-    /* case 67 */ peeek, 
+    /* case 67 */ peeek,
     /* case 68 */ adc,
     /* case 69 */ pin,
-    /* case 70 */ duty, 
+    /* case 70 */ duty,
     /* case 71 */ freq };
 
 void evaluate()
 { while (true){
     bytecode=(unsigned char)cData[P++];
     if (bytecode) {primitives[bytecode]();}
-    else {break;} 
+    else {break;}
   }                 // break on NOP
 }
-  
+
 static const char *index_html =
 "<!html>\n"
 "<head>\n"
@@ -615,7 +615,7 @@ static void handleInput() {
 }
 
 void setup()
-{ 
+{
   P = 0x180;
   WP = 0x184;
   IP = 0;
@@ -630,7 +630,7 @@ void setup()
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
-  } 
+  }
   Serial.println("");
   Serial.println("WiFi connected");
   Serial.print("IP Address: ");
@@ -638,34 +638,34 @@ void setup()
   // if you get a connection, report back via serial:
   server.begin();
   Serial.println("Booting esp32Forth v5.8 ...");
-  
+
 // Setup timer and attach timer to a led pin
   ledcSetup(0, 100, LEDC_TIMER_13_BIT);
   ledcAttachPin(5, 0);
   ledcAnalogWrite(0, 250, brightness);
   pinMode(2,OUTPUT);
-  digitalWrite(2, HIGH);   // turn the LED2 on 
+  digitalWrite(2, HIGH);   // turn the LED2 on
   pinMode(16,OUTPUT);
   digitalWrite(16, HIGH);   // motor1 forward
   pinMode(17,OUTPUT);
-  digitalWrite(17, HIGH);   // motor1 backward 
+  digitalWrite(17, HIGH);   // motor1 backward
   pinMode(18,OUTPUT);
-  digitalWrite(18, HIGH);   // motor2 forward 
+  digitalWrite(18, HIGH);   // motor2 forward
   pinMode(19,OUTPUT);
   digitalWrite(19, HIGH);   // motor2 bacward
-  
+
   if(!SPIFFS.begin(true)){Serial.println("Error mounting SPIFFS"); }
   File file = SPIFFS.open("/load.txt");
   if(file) {
     Serial.println("Load file.");
-    len = file.read(cData+0x8000,0x7000); 
+    len = file.read(cData+0x8000,0x7000);
     data[0x66] = 0;                   // >IN
     data[0x67] = len;                 // #TIB
     data[0x68] = 0x8000;              // 'TIB
     P = 0x180;                        // EVAL
     WP = 0x184;
     evaluate();
-    Serial.println(" Done loading."); 
+    Serial.println(" Done loading.");
     file.close();
     SPIFFS.end();
   }
@@ -699,7 +699,7 @@ void loop() {
           Serial.println(HTTPin);           // line cleaned up
           len=HTTPin.length();
           HTTPin.getBytes(cData,len);
-          Serial.println("Enter Forth."); 
+          Serial.println("Enter Forth.");
           data[0x66] = 0;                   // >IN
           data[0x67] = len;                 // #TIB
           data[0x68] = 0;                   // 'TIB
