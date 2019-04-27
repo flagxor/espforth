@@ -489,7 +489,7 @@ void evaluate()
 static const char *index_html =
 "<!html>\n"
 "<head>\n"
-"<title>esp32forth5.6</title>\n"
+"<title>esp32forth</title>\n"
 "<style>\n"
 "body {\n"
 "  padding: 5px;\n"
@@ -499,6 +499,8 @@ static const char *index_html =
 "#prompt {\n"
 "  width: 100%;\n"
 "  padding: 5px;\n"
+"  font-family: monospace;\n"
+"  background-color: #ff8;\n"
 "}\n"
 "#output {\n"
 "  width: 100%;\n"
@@ -507,10 +509,9 @@ static const char *index_html =
 "}\n"
 "</style>\n"
 "</head>\n"
-"<h2>esp32forth5.6</h2>\n"
+"<h2>esp32forth</h2>\n"
 "<link rel=\"icon\" href=\"data:,\">\n"
 "<body>\n"
-"<input id=\"prompt\" type=\"prompt\"></input><br/>\n"
 "Upload File: <input id=\"filepick\" type=\"file\" name=\"files[]\"></input><br/>\n"
 "<button onclick=\"ask('hex')\">hex</button>\n"
 "<button onclick=\"ask('decimal')\">decimal</button>\n"
@@ -526,7 +527,10 @@ static const char *index_html =
 "<button onclick=\"ask('0 p0')\">stop</button>\n"
 "<button onclick=\"ask('4 p0s')\">LED</button>\n"
 "<button onclick=\"ask('$24 ADC . $27 ADC . $22 ADC . $23 ADC .')\">ADC</button>\n"
+"<br/>\n"
 "<textarea id=\"output\" readonly></textarea>\n"
+"<br/>\n"
+"<input id=\"prompt\" type=\"prompt\"></input><br/>\n"
 "<script>\n"
 "var prompt = document.getElementById('prompt');\n"
 "var filepick = document.getElementById('filepick');\n"
@@ -598,18 +602,18 @@ static void handleInput() {
   Serial.println(HTTPin);  // line cleaned up
   len = HTTPin.length();
   HTTPin.getBytes(cData, len);
-  Serial.println("Enter Forth.");
+//  Serial.println("Enter Forth.");
   data[0x66] = 0;                   // >IN
   data[0x67] = len;                 // #TIB
   data[0x68] = 0;                   // 'TIB
   P = 0x180;                        // EVAL
   WP = 0x184;
   evaluate();
-  Serial.println();
-  Serial.println("Return from Forth.");           // line cleaned up
-  Serial.print("Returning ");
+//  Serial.println();
+//  Serial.println("Return from Forth.");           // line cleaned up
+//  Serial.print("Returning ");
   Serial.print(HTTPout.length());
-  Serial.println(" characters");
+//  Serial.println(" characters");
   server.setContentLength(HTTPout.length());
   server.send(200, "text/plain", HTTPout);
 }
