@@ -70,12 +70,13 @@ void ledcAnalogWrite(uint8_t channel, uint32_t value, uint32_t valueMax = 255) {
 }
 
 #include <WiFi.h>
+#include <WebServer.h>
 #include "SPIFFS.h"
 
 const char* ssid = "SVFIG";//type your ssid
 const char* pass = "12345678";//type your password
 
-WiFiServer server(80);
+WebServer server(80);
 
 /******************************************************************************/
 /* esp32Forth_51                                                              */
@@ -485,6 +486,134 @@ void evaluate()
   }                 // break on NOP
 }
   
+static const char *index_html =
+"<!html>\n"
+"<head>\n"
+"<title>esp32forth5.6</title>\n"
+"<style>\n"
+"body {\n"
+"  padding: 5px;\n"
+"  background-color: #111;\n"
+"  color: #2cf;\n"
+"}\n"
+"#prompt {\n"
+"  width: 100%;\n"
+"  padding: 5px;\n"
+"}\n"
+"#output {\n"
+"  width: 100%;\n"
+"  height: 80%;\n"
+"  resize: none;\n"
+"}\n"
+"</style>\n"
+"</head>\n"
+"<h2>esp32forth5.6</h2>\n"
+"<link rel=\"icon\" href=\"data:,\">\n"
+"<body>\n"
+"<input id=\"prompt\" type=\"prompt\"></input><br/>\n"
+"Upload File: <input id=\"filepick\" type=\"file\" name=\"files[]\"></input><br/>\n"
+"<button onclick=\"ask('hex')\">hex</button>\n"
+"<button onclick=\"ask('decimal')\">decimal</button>\n"
+"<button onclick=\"ask('words')\">words</button>\n"
+"<button onclick=\"ask('$100 init hush')\">init</button>\n"
+"<button onclick=\"ask('ride')\">ride</button>\n"
+"<button onclick=\"ask('blow')\">blow</button>\n"
+"<button onclick=\"ask('$50000 p0')\">fore</button>\n"
+"<button onclick=\"ask('$a0000 p0')\">back</button>\n"
+"<button onclick=\"ask('$10000 p0')\">left</button>\n"
+"<button onclick=\"ask('$40000 p0')\">right</button>\n"
+"<button onclick=\"ask('$90000 p0')\">spin</button>\n"
+"<button onclick=\"ask('0 p0')\">stop</button>\n"
+"<button onclick=\"ask('4 p0s')\">LED</button>\n"
+"<button onclick=\"ask('$24 ADC . $27 ADC . $22 ADC . $23 ADC .')\">ADC</button>\n"
+"<textarea id=\"output\" readonly></textarea>\n"
+"<script>\n"
+"var prompt = document.getElementById('prompt');\n"
+"var filepick = document.getElementById('filepick');\n"
+"var output = document.getElementById('output');\n"
+"function httpPost(url, items, callback) {\n"
+"  var fd = new FormData();\n"
+"  for (k in items) {\n"
+"    fd.append(k, items[k]);\n"
+"  }\n"
+"  var r = new XMLHttpRequest();\n"
+"  r.onreadystatechange = function() {\n"
+"    if (this.readyState == XMLHttpRequest.DONE) {\n"
+"      if (this.status === 200) {\n"
+"        callback(this.responseText);\n"
+"      } else {\n"
+"        callback(null);\n"
+"      }\n"
+"    }\n"
+"  };\n"
+"  r.open('POST', url);\n"
+"  r.send(fd);\n"
+"}\n"
+"function ask(cmd, callback) {\n"
+"  httpPost('/input',\n"
+"           {cmd: cmd + '\\n'}, function(data) {\n"
+"    if (data !== null) { output.value += data; }\n"
+"    output.scrollTop = output.scrollHeight;  // Scroll to the bottom\n"
+"    if (callback !== undefined) { callback(); }\n"
+"  });\n"
+"}\n"
+"prompt.onkeyup = function(event) {\n"
+"  if (event.keyCode === 13) {\n"
+"    event.preventDefault();\n"
+"    ask(prompt.value);\n"
+"    prompt.value = '';\n"
+"  }\n"
+"};\n"
+"filepick.onchange = function(event) {\n"
+"  if (event.target.files.length > 0) {\n"
+"    var reader = new FileReader();\n"
+"    reader.onload = function(e) {\n"
+"      var parts = e.target.result.split('\\n');\n"
+"      function upload() {\n"
+"        if (parts.length === 0) { filepick.value = ''; return; }\n"
+"        ask(parts.shift(), upload);\n"
+"      }\n"
+"      upload();\n"
+"    }\n"
+"    reader.readAsText(event.target.files[0]);\n"
+"  }\n"
+"};\n"
+"window.onload = function() {\n"
+"  ask('');\n"
+"  prompt.focus();\n"
+"};\n"
+"</script>\n"
+;
+
+static void returnFail(String msg) {
+  server.send(500, "text/plain", msg + "\r\n");
+}
+
+static void handleInput() {
+  if (!server.hasArg("cmd")) {
+    return returnFail("Missing Input");
+  }
+  HTTPin = server.arg("cmd");
+  HTTPout = "";
+  Serial.println(HTTPin);  // line cleaned up
+  len = HTTPin.length();
+  HTTPin.getBytes(cData, len);
+  Serial.println("Enter Forth.");
+  data[0x66] = 0;                   // >IN
+  data[0x67] = len;                 // #TIB
+  data[0x68] = 0;                   // 'TIB
+  P = 0x180;                        // EVAL
+  WP = 0x184;
+  evaluate();
+  Serial.println();
+  Serial.println("Return from Forth.");           // line cleaned up
+  Serial.print("Returning ");
+  Serial.print(HTTPout.length());
+  Serial.println(" characters");
+  server.setContentLength(HTTPout.length());
+  server.send(200, "text/plain", HTTPout);
+}
+
 void setup()
 { 
   P = 0x180;
@@ -540,6 +669,13 @@ void setup()
     file.close();
     SPIFFS.end();
   }
+  // Setup web server handlers
+  server.on("/", HTTP_GET, []() {
+    server.send(200, "text/html", index_html);
+  });
+  server.on("/input", HTTP_POST, handleInput);
+  server.begin();
+  Serial.println("HTTP server started");
 }
 
 void loop() {
@@ -606,4 +742,8 @@ void loop() {
     client.stop();
     Serial.println("Client disconnected.");
   }
+}
+
+void loop() {
+  server.handleClient();
 }
