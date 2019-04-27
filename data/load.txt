@@ -1,0 +1,74 @@
+DECIMAL 1000000 ppqn ! 
+: NOTE >R 2* 0 tone R> DELAY ; 
+: ppqn@ ppqn @ ; 
+: 1/4 ppqn@ NOTE ; 
+: 1/2 ppqn@ 2* NOTE ;
+: 1/8 ppqn@ 2/ NOTE ; 
+: 3/4 ppqn@ 3 1 */ NOTE ; 
+: 3/8 ppqn@ 3 2 */ NOTE ;
+
+: BLOW 
+G2 1/4 G2 1/4 A2 1/8 G2 3/8 
+E2 1/4 C2 1/4 E2 1/4 G2 3/8 
+A2 1/8 G2 1/4 E2 1/2 
+C2 1/8 E2 1/8 G2 3/4 A2 3/4 
+F2 3/8 E2 1/8 F2 1/4 D2 1/2 D2 1/2 
+D2 1/4 D2 1/4 D2 1/4 F2 1/4 
+E2 1/4 D2 1/4 F2 1/4 E2 1/4 
+D2 1/4 A2 3/4 G2 1/4 G2 1/4 
+G2 1/4 G2 1/2 F2 1/4 E2 3/8 
+D2 1/8 E2 1/4 C2 3/4 hush ; 
+
+: RIDE 
+C2 1/4 C2 1/8 D2# 3/8 C2 3/8 
+D2# 1/4 D2# 1/8 G2 3/8 D2# 3/8 
+G2 1/4 G2 1/8 A2# 3/8 A2# 3/8 
+D2# 1/4 D2# 1/8 G2 3/4 hush ;
+
+: LASER 
+for dup 120 - 1 20 */ 120 swap 
+for dup 0 tone 20 + 30000 DELAY 
+next drop 
+next drop hush ; 
+( 400 10 LASER )
+
+: WARBLE 
+for dup 120 - 1 20 */ 120 swap 
+for dup 0 tone 
+20 + 30000 DELAY 
+next drop 
+next drop hush ; 
+( 800 10 WARBLE )
+
+decimal variable vWAIL 160 vWAIL ! 
+: WAIL 
+for vWAIL @ dup 
+for dup 0 tone 
+2dup swap / 300 * DELAY 
+1+ next drop 
+next drop 10000 delay hush ; 
+( 10 10 wail )
+
+: BIRD 
+for 100 over 10 / 
+  for dup 0 tone 
+    2dup - 1 max 100 * delay 
+  10 + next drop 
+next drop 10000 delay hush ; 
+( 600 10 BIRD )
+
+: UPDOWN 
+0 over 10 / 
+for dup 0 tone 100000 delay 
+10 + next drop 
+dup 10 / 
+for aft dup 0 tone 100000 delay 
+10 - then next drop hush ; 
+( 500 updown )
+
+: TONES 
+for 100 over 
+  for dup 0 tone 10000 delay 
+  1+ next drop 
+next drop hush ; 
+( 1000 2 tones )
