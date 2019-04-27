@@ -89,15 +89,20 @@ WebServer server(80);
 # define  pop top = stack[(unsigned char)S--]
 # define  push stack[(unsigned char)++S] = top; top =
 
-long rack[256] = {0};
-long stack[256] = {0};
-unsigned char R, S, bytecode ;
-long* Pointer ;
-long  P, IP, WP, top, len ;
+long rack_main[256] = {0};
+long stack_main[256] = {0};
+long rack_background[256] = {0};
+long stack_background[256] = {0};
+__thread long *rack;
+__thread long *stack;
+__thread unsigned char R, S, bytecode ;
+__thread long* Pointer ;
+__thread long  P, IP, WP, top, len ;
 uint8_t* cData ;
-long long int d, n, m ;
+__thread long long int d, n, m ;
 String HTTPin;
 String HTTPout;
+TaskHandle_t background_thread;
 
 #include "rom_56.h" /* load dictionary */
 
@@ -478,8 +483,13 @@ void (*primitives[72])(void) = {
     /* case 70 */ duty,
     /* case 71 */ freq };
 
+__thread int counter = 0;
 void evaluate()
 { while (true){
+    if (counter++ > 10000) {
+      delay(1);
+      counter = 0;
+    }
     bytecode=(unsigned char)cData[P++];
     if (bytecode) {primitives[bytecode]();}
     else {break;}
@@ -489,7 +499,7 @@ void evaluate()
 static const char *index_html =
 "<!html>\n"
 "<head>\n"
-"<title>esp32forth5.6</title>\n"
+"<title>esp32forth</title>\n"
 "<style>\n"
 "body {\n"
 "  padding: 5px;\n"
@@ -499,6 +509,8 @@ static const char *index_html =
 "#prompt {\n"
 "  width: 100%;\n"
 "  padding: 5px;\n"
+"  font-family: monospace\n"
+"  background-color: #ff8\n"
 "}\n"
 "#output {\n"
 "  width: 100%;\n"
@@ -507,10 +519,9 @@ static const char *index_html =
 "}\n"
 "</style>\n"
 "</head>\n"
-"<h2>esp32forth5.6</h2>\n"
+"<h2>esp32forth</h2>\n"
 "<link rel=\"icon\" href=\"data:,\">\n"
 "<body>\n"
-"<input id=\"prompt\" type=\"prompt\"></input><br/>\n"
 "Upload File: <input id=\"filepick\" type=\"file\" name=\"files[]\"></input><br/>\n"
 "<button onclick=\"ask('hex')\">hex</button>\n"
 "<button onclick=\"ask('decimal')\">decimal</button>\n"
@@ -526,7 +537,9 @@ static const char *index_html =
 "<button onclick=\"ask('0 p0')\">stop</button>\n"
 "<button onclick=\"ask('4 p0s')\">LED</button>\n"
 "<button onclick=\"ask('$24 ADC . $27 ADC . $22 ADC . $23 ADC .')\">ADC</button>\n"
+"<br/>\n"
 "<textarea id=\"output\" readonly></textarea>\n"
+"<input id=\"prompt\" type=\"prompt\"></input><br/>\n"
 "<script>\n"
 "var prompt = document.getElementById('prompt');\n"
 "var filepick = document.getElementById('filepick');\n"
@@ -598,24 +611,52 @@ static void handleInput() {
   Serial.println(HTTPin);  // line cleaned up
   len = HTTPin.length();
   HTTPin.getBytes(cData, len);
-  Serial.println("Enter Forth.");
+  //Serial.println("Enter Forth.");
   data[0x66] = 0;                   // >IN
   data[0x67] = len;                 // #TIB
   data[0x68] = 0;                   // 'TIB
-  P = 0x180;                        // EVAL
-  WP = 0x184;
-  evaluate();
-  Serial.println();
-  Serial.println("Return from Forth.");           // line cleaned up
-  Serial.print("Returning ");
+  if (len > 3 && memcmp(cData, "bg ", 3) == 0) {
+    if (background_thread) {
+      vTaskDelete(background_thread);
+      background_thread = 0;
+    }
+    data[0x66] = 3; // Skip "bg "
+    // Start background thread 1024 byte stack.
+    xTaskCreate(background, "background", 1024, &IP, tskIDLE_PRIORITY, &background_thread);
+  } else {
+    P = 0x180;                        // EVAL
+    WP = 0x184;
+    evaluate();
+  }
+//  Serial.println();
+//  Serial.println("Return from Forth.");           // line cleaned up
+//  Serial.print("Returning ");
   Serial.print(HTTPout.length());
-  Serial.println(" characters");
+//  Serial.println(" characters");
   server.setContentLength(HTTPout.length());
   server.send(200, "text/plain", HTTPout);
 }
 
+void background(void *ipp) {
+  long *ipv = (long*) ipp;
+  rack = rack_background;
+  stack = stack_background;
+  Serial.println("background!!");
+  IP = *ipv;
+  S = 0;
+  R = 0;
+  top = 0;
+  P = 0x180;                        // EVAL
+  WP = 0x184;
+  evaluate();
+  for(;;) {
+  }
+}
+
 void setup()
 {
+  rack = rack_main;
+  stack = stack_main;
   P = 0x180;
   WP = 0x184;
   IP = 0;

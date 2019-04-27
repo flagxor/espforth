@@ -72,3 +72,9 @@ for 100 over
   1+ next drop 
 next drop hush ; 
 ( 1000 2 tones )
+
+: on 0 p0 ;
+: off $90000 p0 ;
+: blink on 400000 delay off 400000 delay ;
+: reblink begin blink again ;
+
