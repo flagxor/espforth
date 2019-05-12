@@ -581,6 +581,7 @@ static const char *index_html =
 "    var reader = new FileReader();\n"
 "    reader.onload = function(e) {\n"
 "      ask(e.target.result);\n"
+"      filepick.value = '';\n"
 "    }\n"
 "    reader.readAsText(event.target.files[0]);\n"
 "  }\n"
