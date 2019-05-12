@@ -1,14 +1,8 @@
 /******************************************************************************/
-/* espForth, Version 5.6 : for NodeMCU ESP32S                                 */
+/* espForth, Version 5.4 : for NodeMCU ESP32S                                 */
 /******************************************************************************/
-/* 13mar19cht  _58                                                            */
-/* motor, speaker, adc                                                     */
-/* 13mar19cht  _57                                                            */
-/* buttons and text box                                                       */
-/* 13mar19cht  _54,55,56                                                      */
-/* audio demo from Whisker                                                    */
-/* HTTP server, NOP returns from Forth to loop()                              */
-/* Load.txt compiled on boot                                                  */
+/* 10may19cht  _54                                                            */
+/* robot tests                                               */
 /* 21jan19cht  _51                                                            */
 /* 8 channel electronic organ                                                 */
 /* 15jan19cht  _50                                                            */
@@ -69,14 +63,13 @@ void ledcAnalogWrite(uint8_t channel, uint32_t value, uint32_t valueMax = 255) {
   ledcWrite(channel, duty);
 }
 
-#include <WiFi.h>
-#include <WebServer.h>
+//#include <WiFi.h>
 #include "SPIFFS.h"
 
-const char* ssid = "SVFIG";//type your ssid
-const char* pass = "12345678";//type your password
+const char* ssid = "TING";//type your ssid
+const char* pass = "youarewelcome";//type your password
 
-WebServer server(80);
+//WiFiServer server(80);
 
 /******************************************************************************/
 /* esp32Forth_51                                                              */
@@ -89,21 +82,17 @@ WebServer server(80);
 # define  pop top = stack[(unsigned char)S--]
 # define  push stack[(unsigned char)++S] = top; top =
 
-long rack_main[256] = {0};
-long stack_main[256] = {0};
-long rack_background[256] = {0};
-long stack_background[256] = {0};
-__thread long *rack;
-__thread long *stack;
-__thread unsigned char R, S, bytecode ;
-__thread long* Pointer ;
-__thread long  P, IP, WP, top, len ;
+long rack[256] = {0};
+long stack[256] = {0};
+unsigned char R, S, bytecode, c ;
+long* Pointer ;
+long  P, IP, WP, top, len ;
 uint8_t* cData ;
-__thread long long int d, n, m ;
+long long int d, n, m ;
+String HTTPin;
 String HTTPout;
-TaskHandle_t background_thread;
 
-#include "rom_56.h" /* load dictionary */
+#include "rom_54.h" /* load dictionary */
 
 /******************************************************************************/
 /* PRIMITIVES                                                                 */
@@ -111,7 +100,7 @@ TaskHandle_t background_thread;
 
 void next(void)
 { P = data[IP>>2];
-  IP += 4;
+  IP += 4; 
   WP = P+4;  }
 
 void accep()
@@ -130,8 +119,8 @@ void txsto(void)
 {  Serial.write( (unsigned char) top);
    char c=top;
    HTTPout += c ;
-   pop;
-}
+   pop; 
+} 
 
 void docon(void)
 {  push data[WP>>2]; }
@@ -143,7 +132,7 @@ void dolit(void)
 
 void dolist(void)
 {   rack[(unsigned char)++R] = IP;
-  IP = WP;
+  IP = WP; 
   next(); }
 
 void exitt(void)
@@ -158,17 +147,17 @@ void execu(void)
 void donext(void)
 {   if(rack[(unsigned char)R]) {
     rack[(unsigned char)R] -= 1 ;
-    IP = data[IP>>2];
+    IP = data[IP>>2]; 
   } else { IP += 4;  (unsigned char)R-- ;  }
   next(); }
 
 void qbran(void)
-{   if(top == 0) IP = data[IP>>2];
-  else IP += 4;  pop;
+{   if(top == 0) IP = data[IP>>2]; 
+  else IP += 4;  pop; 
   next(); }
 
 void bran(void)
-{   IP = data[IP>>2];
+{   IP = data[IP>>2]; 
   next(); }
 
 void store(void)
@@ -228,10 +217,10 @@ void xorr(void)
 
 void uplus(void)
 {   stack[(unsigned char)S] += top;
-  top = LOWER(stack[(unsigned char)S], top);  }
+  top = LOWER(stack[(unsigned char)S], top);  } 
 
 void nop(void)
-{   next(); }
+{   next(); } 
 
 void qdup(void)
 {   if(top) stack[(unsigned char)++S] = top ;  }
@@ -260,7 +249,7 @@ void negat(void)
 void dnega(void)
 {   inver();
   tor();
-  inver();
+  inver(); 
   push 1;
   uplus();
   rfrom();
@@ -410,10 +399,10 @@ void freq(void)
 
 void (*primitives[72])(void) = {
     /* case 0 */ nop,
-    /* case 1 */ accep,
-    /* case 2 */ qrx,
-    /* case 3 */ txsto,
-    /* case 4 */ docon,
+    /* case 1 */ accep, 
+    /* case 2 */ qrx,    
+    /* case 3 */ txsto,  
+    /* case 4 */ docon,   
     /* case 5 */ dolit,
     /* case 6 */ dolist,
     /* case 7 */ exitt,
@@ -430,7 +419,7 @@ void (*primitives[72])(void) = {
     /* case 18 */ rfrom,
     /* case 19 */ rat,
     /* case 20 */ tor,
-    /* case 21 */ nop,
+    /* case 21 */ nop, 
     /* case 22 */ nop,
     /* case 23 */ drop,
     /* case 24 */ dup,
@@ -441,214 +430,57 @@ void (*primitives[72])(void) = {
     /* case 29 */ orr,
     /* case 30 */ xorr,
     /* case 31 */ uplus,
-    /* case 32 */ next,
-    /* case 33 */ qdup,
-    /* case 34 */ rot,
-    /* case 35 */ ddrop,
-    /* case 36 */ ddup,
+    /* case 32 */ next, 
+    /* case 33 */ qdup, 
+    /* case 34 */ rot, 
+    /* case 35 */ ddrop, 
+    /* case 36 */ ddup, 
     /* case 37 */ plus,
-    /* case 38 */ inver,
-    /* case 39 */ negat,
-    /* case 40 */ dnega,
-    /* case 41 */ subb,
+    /* case 38 */ inver, 
+    /* case 39 */ negat, 
+    /* case 40 */ dnega, 
+    /* case 41 */ subb, 
     /* case 42 */ abss,
-    /* case 43 */ equal,
-    /* case 44 */ uless,
-    /* case 45 */ less,
+    /* case 43 */ equal, 
+    /* case 44 */ uless, 
+    /* case 45 */ less,   
     /* case 46 */ ummod,
     /* case 47 */ msmod,
-    /* case 48 */ slmod,
-    /* case 49 */ mod,
-    /* case 50 */ slash,
-    /* case 51 */ umsta,
-    /* case 52 */ star,
-    /* case 53 */ mstar,
-    /* case 54 */ ssmod,
-    /* case 55 */ stasl,
-    /* case 56 */ pick,
-    /* case 57 */ pstor,
-    /* case 58 */ dstor,
-    /* case 59 */ dat,
-    /* case 60 */ count,
-    /* case 61 */ dovar,
-    /* case 62 */ maxx,
+    /* case 48 */ slmod, 
+    /* case 49 */ mod,  
+    /* case 50 */ slash, 
+    /* case 51 */ umsta,   
+    /* case 52 */ star, 
+    /* case 53 */ mstar, 
+    /* case 54 */ ssmod, 
+    /* case 55 */ stasl, 
+    /* case 56 */ pick, 
+    /* case 57 */ pstor, 
+    /* case 58 */ dstor, 
+    /* case 59 */ dat, 
+    /* case 60 */ count, 
+    /* case 61 */ dovar, 
+    /* case 62 */ maxx, 
     /* case 63 */ minn,
     /* case 64 */ audio,
     /* case 65 */ sendPacket,
     /* case 66 */ poke,
-    /* case 67 */ peeek,
+    /* case 67 */ peeek, 
     /* case 68 */ adc,
     /* case 69 */ pin,
-    /* case 70 */ duty,
+    /* case 70 */ duty, 
     /* case 71 */ freq };
 
-__thread int counter = 0;
 void evaluate()
 { while (true){
-    if (counter++ > 10000) {
-      delay(1);
-      counter = 0;
-    }
     bytecode=(unsigned char)cData[P++];
     if (bytecode) {primitives[bytecode]();}
-    else {break;}
+    else {break;} 
   }                 // break on NOP
 }
-
-static const char *index_html =
-"<!html>\n"
-"<head>\n"
-"<title>esp32forth</title>\n"
-"<style>\n"
-"body {\n"
-"  padding: 5px;\n"
-"  background-color: #111;\n"
-"  color: #2cf;\n"
-"}\n"
-"#prompt {\n"
-"  width: 100%;\n"
-"  padding: 5px;\n"
-"  font-family: monospace;\n"
-"  background-color: #ff8;\n"
-"}\n"
-"#output {\n"
-"  width: 100%;\n"
-"  height: 80%;\n"
-"  resize: none;\n"
-"}\n"
-"</style>\n"
-"</head>\n"
-"<h2>esp32forth</h2>\n"
-"<link rel=\"icon\" href=\"data:,\">\n"
-"<body>\n"
-"Upload File: <input id=\"filepick\" type=\"file\" name=\"files[]\"></input><br/>\n"
-"<button onclick=\"ask('hex')\">hex</button>\n"
-"<button onclick=\"ask('decimal')\">decimal</button>\n"
-"<button onclick=\"ask('words')\">words</button>\n"
-"<button onclick=\"ask('$100 init hush')\">init</button>\n"
-"<button onclick=\"ask('ride')\">ride</button>\n"
-"<button onclick=\"ask('blow')\">blow</button>\n"
-"<button onclick=\"ask('$50000 p0')\">fore</button>\n"
-"<button onclick=\"ask('$a0000 p0')\">back</button>\n"
-"<button onclick=\"ask('$10000 p0')\">left</button>\n"
-"<button onclick=\"ask('$40000 p0')\">right</button>\n"
-"<button onclick=\"ask('$90000 p0')\">spin</button>\n"
-"<button onclick=\"ask('0 p0')\">stop</button>\n"
-"<button onclick=\"ask('4 p0s')\">LED</button>\n"
-"<button onclick=\"ask('$24 ADC . $27 ADC . $22 ADC . $23 ADC .')\">ADC</button>\n"
-"<br/>\n"
-"<textarea id=\"output\" readonly></textarea>\n"
-"<input id=\"prompt\" type=\"prompt\"></input><br/>\n"
-"<script>\n"
-"var prompt = document.getElementById('prompt');\n"
-"var filepick = document.getElementById('filepick');\n"
-"var output = document.getElementById('output');\n"
-"function httpPost(url, items, callback) {\n"
-"  var fd = new FormData();\n"
-"  for (k in items) {\n"
-"    fd.append(k, items[k]);\n"
-"  }\n"
-"  var r = new XMLHttpRequest();\n"
-"  r.onreadystatechange = function() {\n"
-"    if (this.readyState == XMLHttpRequest.DONE) {\n"
-"      if (this.status === 200) {\n"
-"        callback(this.responseText);\n"
-"      } else {\n"
-"        callback(null);\n"
-"      }\n"
-"    }\n"
-"  };\n"
-"  r.open('POST', url);\n"
-"  r.send(fd);\n"
-"}\n"
-"function ask(cmd, callback) {\n"
-"  httpPost('/input',\n"
-"           {cmd: cmd + '\\n'}, function(data) {\n"
-"    if (data !== null) { output.value += data; }\n"
-"    output.scrollTop = output.scrollHeight;  // Scroll to the bottom\n"
-"    if (callback !== undefined) { callback(); }\n"
-"  });\n"
-"}\n"
-"prompt.onkeyup = function(event) {\n"
-"  if (event.keyCode === 13) {\n"
-"    event.preventDefault();\n"
-"    ask(prompt.value);\n"
-"    prompt.value = '';\n"
-"  }\n"
-"};\n"
-"filepick.onchange = function(event) {\n"
-"  if (event.target.files.length > 0) {\n"
-"    var reader = new FileReader();\n"
-"    reader.onload = function(e) {\n"
-"      ask(e.target.result);\n"
-"    }\n"
-"    reader.readAsText(event.target.files[0]);\n"
-"  }\n"
-"};\n"
-"window.onload = function() {\n"
-"  ask('');\n"
-"  prompt.focus();\n"
-"};\n"
-"</script>\n"
-;
-
-static void returnFail(String msg) {
-  server.send(500, "text/plain", msg + "\r\n");
-}
-
-static void handleInput() {
-  if (!server.hasArg("cmd")) {
-    return returnFail("Missing Input");
-  }
-  HTTPout = "";
-  len = server.arg("cmd").length();
-  server.arg("cmd").getBytes(cData+0x8000, len);
-  data[0x66] = 0;                   // >IN
-  data[0x67] = len;                 // #TIB
-  data[0x68] = 0x8000;              // 'TIB
-  if (len > 3 && memcmp(cData, "bg ", 3) == 0) {
-    if (background_thread) {
-      vTaskDelete(background_thread);
-      background_thread = 0;
-    }
-    data[0x66] = 3; // Skip "bg "
-    // Start background thread 1024 byte stack.
-    xTaskCreate(background, "background", 1024, &IP, tskIDLE_PRIORITY, &background_thread);
-  } else {
-    P = 0x180;                        // EVAL
-    WP = 0x184;
-    evaluate();
-  }
-//  Serial.println();
-//  Serial.println("Return from Forth.");           // line cleaned up
-//  Serial.print("Returning ");
-  Serial.print(HTTPout.length());
-//  Serial.println(" characters");
-  server.setContentLength(HTTPout.length());
-  server.send(200, "text/plain", HTTPout);
-}
-
-void background(void *ipp) {
-  long *ipv = (long*) ipp;
-  rack = rack_background;
-  stack = stack_background;
-  Serial.println("background!!");
-  IP = *ipv;
-  S = 0;
-  R = 0;
-  top = 0;
-  P = 0x180;                        // EVAL
-  WP = 0x184;
-  evaluate();
-  for(;;) {
-  }
-}
-
+  
 void setup()
-{
-  rack = rack_main;
-  stack = stack_main;
-  P = 0x180;
+{ P = 0x180;
   WP = 0x184;
   IP = 0;
   S = 0;
@@ -657,59 +489,52 @@ void setup()
   cData = (uint8_t *) data;
   Serial.begin(115200);
   delay(100);
-// attempt to connect to Wifi network:
-  WiFi.begin(ssid, pass);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.localIP());
-  // if you get a connection, report back via serial:
-  server.begin();
-  Serial.println("Booting esp32Forth v5.8 ...");
-
+  Serial.println("Booting esp32Forth_54 ...");
+  
 // Setup timer and attach timer to a led pin
   ledcSetup(0, 100, LEDC_TIMER_13_BIT);
   ledcAttachPin(5, 0);
   ledcAnalogWrite(0, 250, brightness);
   pinMode(2,OUTPUT);
-  digitalWrite(2, HIGH);   // turn the LED2 on
+  digitalWrite(2, HIGH);   // turn the LED2 on 
   pinMode(16,OUTPUT);
-  digitalWrite(16, HIGH);   // motor1 forward
+  digitalWrite(16, LOW);   // motor1 forward
   pinMode(17,OUTPUT);
-  digitalWrite(17, HIGH);   // motor1 backward
+  digitalWrite(17, LOW);   // motor1 backward 
   pinMode(18,OUTPUT);
-  digitalWrite(18, HIGH);   // motor2 forward
+  digitalWrite(18, LOW);   // motor2 forward 
   pinMode(19,OUTPUT);
-  digitalWrite(19, HIGH);   // motor2 bacward
-
+  digitalWrite(19, LOW);   // motor2 bacward
+  
   if(!SPIFFS.begin(true)){Serial.println("Error mounting SPIFFS"); }
   File file = SPIFFS.open("/load.txt");
   if(file) {
-    Serial.println("Load file.");
-    len = file.read(cData+0x8000,0x7000);
+    Serial.print("Load file: ");
+    len = file.read(cData+0x8000,0x7000); 
+    Serial.print(len);
+    Serial.println(" bytes.");
     data[0x66] = 0;                   // >IN
     data[0x67] = len;                 // #TIB
     data[0x68] = 0x8000;              // 'TIB
     P = 0x180;                        // EVAL
     WP = 0x184;
     evaluate();
-    Serial.println(" Done loading.");
+    Serial.println(" Done loading."); 
     file.close();
     SPIFFS.end();
   }
-  // Setup web server handlers
-  server.on("/", HTTP_GET, []() {
-    server.send(200, "text/html", index_html);
-  });
-  server.on("/input", HTTP_POST, handleInput);
-  server.begin();
-  Serial.println("HTTP server started");
 }
 
 void loop() {
-  server.handleClient();
+    HTTPout = "";
+    while (true) {             // if there's bytes to read from the client,
+      len = Serial.readBytes(cData, 256); 
+      if (len) {break;}
+      }
+    data[0x66] = 0;                   // >IN
+    data[0x67] = len;                 // #TIB
+    data[0x68] = 0;                   // 'TIB
+    P = 0x180;                        // EVAL
+    WP = 0x184;
+    evaluate();
 }
