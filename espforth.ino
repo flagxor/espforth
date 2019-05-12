@@ -100,7 +100,6 @@ __thread long* Pointer ;
 __thread long  P, IP, WP, top, len ;
 uint8_t* cData ;
 __thread long long int d, n, m ;
-String HTTPin;
 String HTTPout;
 TaskHandle_t background_thread;
 
@@ -581,12 +580,7 @@ static const char *index_html =
 "  if (event.target.files.length > 0) {\n"
 "    var reader = new FileReader();\n"
 "    reader.onload = function(e) {\n"
-"      var parts = e.target.result.split('\\n');\n"
-"      function upload() {\n"
-"        if (parts.length === 0) { filepick.value = ''; return; }\n"
-"        ask(parts.shift(), upload);\n"
-"      }\n"
-"      upload();\n"
+"      ask(e.target.result);\n"
 "    }\n"
 "    reader.readAsText(event.target.files[0]);\n"
 "  }\n"
@@ -606,15 +600,12 @@ static void handleInput() {
   if (!server.hasArg("cmd")) {
     return returnFail("Missing Input");
   }
-  HTTPin = server.arg("cmd");
   HTTPout = "";
-  Serial.println(HTTPin);  // line cleaned up
-  len = HTTPin.length();
-  HTTPin.getBytes(cData, len);
-  //Serial.println("Enter Forth.");
+  len = server.arg("cmd").length();
+  server.arg("cmd").getBytes(cData+0x8000, len);
   data[0x66] = 0;                   // >IN
   data[0x67] = len;                 // #TIB
-  data[0x68] = 0;                   // 'TIB
+  data[0x68] = 0x8000;              // 'TIB
   if (len > 3 && memcmp(cData, "bg ", 3) == 0) {
     if (background_thread) {
       vTaskDelete(background_thread);
