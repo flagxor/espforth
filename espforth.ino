@@ -607,7 +607,7 @@ static void handleInput() {
   data[0x66] = 0;                   // >IN
   data[0x67] = len;                 // #TIB
   data[0x68] = 0x8000;              // 'TIB
-  if (len > 3 && memcmp(cData, "bg ", 3) == 0) {
+  if (len > 3 && memcmp(cData+0x8000, "bg ", 3) == 0) {
     if (background_thread) {
       vTaskDelete(background_thread);
       background_thread = 0;
