@@ -1,6 +1,10 @@
 // esp32 Forth, based on Version 6.3
 
 #include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
@@ -15,24 +19,16 @@
 # define  popR rack[(unsigned char)R--]
 # define  pushR rack[(unsigned char)++R]
 
-long rack_main[256] = {0};
-long stack_main[256] = {0};
-long rack_background[256] = {0};
-long stack_background[256] = {0};
-long *rack;
-long *stack;
+long rack[256] = {0};
+long stack[256] = {0};
 unsigned char R, S, bytecode ;
 long* Pointer ;
 long  P, IP, WP, top, links, len ;
 uint8_t* cData ;
 long long int d, n, m ;
-String HTTPin;
-String HTTPout;
-TaskHandle_t background_thread;
 
 int BRAN=0,QBRAN=0,DONXT=0,DOTQP=0,STRQP=0,TOR=0,ABORQP=0;
 
-//#include "rom_54.h" /* load dictionary */
 long data[16000] = {};
 int IMEDD=0x80;
 int COMPO=0x40;
@@ -43,19 +39,11 @@ void HEADER(int lex, char seq[]) {
   int len=lex&31;
   data[P++]=links;
   IP=P<<2;
-  Serial.println();
-  Serial.print(links,HEX);
-  for (i=links>>2;i<P;i++)
-     {Serial.print(" ");Serial.print(data[i],HEX);}
   links=IP;
   cData[IP++]=lex;
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
   while (IP&3) {cData[IP++]=0;}
-  Serial.println();
-  Serial.print(seq);
-  Serial.print(" ");
-  Serial.print(IP,HEX);
 }
 int CODE(int len, ... ) {
   int addr=IP;
@@ -65,8 +53,6 @@ int CODE(int len, ... ) {
   for(; len;len--) {
     s= va_arg(argList, int);
     cData[IP++]=s;
-    Serial.print(" ");
-    Serial.print(s,HEX);
   }
   va_end(argList);
   return addr;
@@ -77,15 +63,9 @@ int COLON(int len, ... ) {
   data[P++]=6; // dolist
   va_list argList;
   va_start(argList, len);
-  Serial.println();
-  Serial.print(addr,HEX);
-  Serial.print(" ");
-  Serial.print(6,HEX);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
-    Serial.print(" ");
-    Serial.print(j,HEX);
   }
   IP=P<<2;
   va_end(argList);
@@ -96,13 +76,9 @@ int LABEL(int len, ... ) {
   P=IP>>2;
   va_list argList;
   va_start(argList, len);
-  Serial.println();
-  Serial.print(addr,HEX);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
-    Serial.print(" ");
-    Serial.print(j,HEX);
   }
   IP=P<<2;
   va_end(argList);
@@ -110,26 +86,18 @@ int LABEL(int len, ... ) {
   }
 void BEGIN(int len, ... ) {
   P=IP>>2;
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" BEGIN ");
   pushR=P;
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
-    Serial.print(" ");
-    Serial.print(j,HEX);
   }
   IP=P<<2;
   va_end(argList);
 }
 void AGAIN(int len, ... ) {
   P=IP>>2;
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" AGAIN ");
   data[P++]=BRAN; 
   data[P++]=popR<<2; 
   va_list argList;
@@ -137,17 +105,12 @@ void AGAIN(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
-    Serial.print(" ");
-    Serial.print(j,HEX);
   }
   IP=P<<2;
   va_end(argList);
   }
 void UNTIL(int len, ... ) {
   P=IP>>2;
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" UNTIL ");
   data[P++]=QBRAN; 
   data[P++]=popR<<2; 
   va_list argList;
@@ -155,8 +118,6 @@ void UNTIL(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
-    Serial.print(" ");
-    Serial.print(j,HEX);
   }
   IP=P<<2;
   va_end(argList);
@@ -164,9 +125,6 @@ void UNTIL(int len, ... ) {
 void WHILE(int len, ... ) {
   P=IP>>2;
   int k;
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" WHILE ");
   data[P++]=QBRAN; 
   data[P++]=0; 
   k=popR;
@@ -177,17 +135,12 @@ void WHILE(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
-    Serial.print(" ");
-    Serial.print(j,HEX);
   }
   IP=P<<2;
   va_end(argList);
   }
 void REPEAT(int len, ... ) {
   P=IP>>2;
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" REPEAT ");
   data[P++]=BRAN; 
   data[P++]=popR<<2; 
   data[popR]=P<<2;
@@ -196,17 +149,12 @@ void REPEAT(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
-    Serial.print(" ");
-    Serial.print(j,HEX);
   }
   IP=P<<2;
   va_end(argList);
   }
 void IF(int len, ... ) {
   P=IP>>2;
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" IF ");
   data[P++]=QBRAN; 
   pushR=P;
   data[P++]=0; 
@@ -215,17 +163,12 @@ void IF(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
-    Serial.print(" ");
-    Serial.print(j,HEX);
   }
   IP=P<<2;
   va_end(argList);
   }
 void ELSE(int len, ... ) {
   P=IP>>2;
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" ELSE ");
   data[P++]=BRAN; 
   data[P++]=0; 
   data[popR]=P<<2; 
@@ -235,34 +178,24 @@ void ELSE(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
-    Serial.print(" ");
-    Serial.print(j,HEX);
   }
   IP=P<<2;
   va_end(argList);
   }
 void THEN(int len, ... ) {
   P=IP>>2;
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" THEN ");
   data[popR]=P<<2; 
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
-    Serial.print(" ");
-    Serial.print(j,HEX);
   }
   IP=P<<2;
   va_end(argList);
   }
 void FOR(int len, ... ) {
   P=IP>>2;
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" FOR ");
   data[P++]=TOR; 
   pushR=P;
   va_list argList;
@@ -270,17 +203,12 @@ void FOR(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
-    Serial.print(" ");
-    Serial.print(j,HEX);
   }
   IP=P<<2;
   va_end(argList);
   }
 void NEXT(int len, ... ) {
   P=IP>>2;
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" NEXT ");
   data[P++]=DONXT; 
   data[P++]=popR<<2; 
   va_list argList;
@@ -288,21 +216,17 @@ void NEXT(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
-    Serial.print(" ");
-    Serial.print(j,HEX);
   }
   IP=P<<2;
   va_end(argList);
   }
 void AFT(int len, ... ) {
   P=IP>>2;
-  int k;
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" AFT ");
   data[P++]=BRAN; 
   data[P++]=0; 
-  k=popR;
+  int k;
+  k = popR;
+  (void) k;
   pushR=P;
   pushR=P-1;
   va_list argList;
@@ -310,8 +234,6 @@ void AFT(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
-    Serial.print(" ");
-    Serial.print(j,HEX);
   }
   IP=P<<2;
   va_end(argList);
@@ -326,10 +248,6 @@ void DOTQ(char seq[]) {
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
   while (IP&3) {cData[IP++]=0;}
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" ");
-  Serial.print(seq);
 }
 void STRQ(char seq[]) {
   P=IP>>2;
@@ -341,10 +259,6 @@ void STRQ(char seq[]) {
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
   while (IP&3) {cData[IP++]=0;}
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" ");
-  Serial.print(seq);
 }
 void ABORQ(char seq[]) {
   P=IP>>2;
@@ -356,23 +270,8 @@ void ABORQ(char seq[]) {
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
   while (IP&3) {cData[IP++]=0;}
-  Serial.println();
-  Serial.print(IP,HEX);
-  Serial.print(" ");
-  Serial.print(seq);
 }
 
-void CheckSum() {
-  int i;
-  char sum=0;
-  Serial.println();
-  Serial.printf("%4x ",IP);
-  for (i=0;i<32;i++) {
-    sum += cData[IP];
-    Serial.printf("%2x",cData[IP++]);
-  }
-  Serial.printf(" %2x",sum);
-}
 /******************************************************************************/
 /* ledc                                                                       */
 /******************************************************************************/
@@ -387,15 +286,6 @@ void CheckSum() {
 #define LED_PIN            5
 int brightness = 255;    // how bright the LED is
 
-// Arduino like analogWrite
-// value has to be between 0 and valueMax
-void ledcAnalogWrite(uint8_t channel, uint32_t value, uint32_t valueMax = 255) {
-  // calculate duty, 8191 from 2 ^ 13 - 1
-  uint32_t duty = (8191 / valueMax) * min(value, valueMax);
-  // write duty to LEDC
-  ledcWrite(channel, duty);
-}
-
 /******************************************************************************/
 /* PRIMITIVES                                                                 */
 /******************************************************************************/
@@ -405,23 +295,20 @@ void next(void)
   IP += 4; 
   WP = P+4;  }
 
-void accep()
-/* WiFiClient */
-{ while (Serial.available()) {
-    len = Serial.readBytes(cData, top); }
-  Serial.write(cData, len);
+void accep() {
+  int len = fread(cData, 1, top, stdin);
   top = len;
 }
-void qrx(void)
-  { while (Serial.available() == 0) {};
-    push Serial.read();
-    push -1; }
 
-void txsto(void)
-{  Serial.write( (unsigned char) top);
-   char c=top;
-   HTTPout += c ;
-   pop; 
+void qrx(void) {
+    push fgetc(stdin);
+    push -1;
+}
+
+void txsto(void) {
+    char c=top;
+    fputc(c, stdin);
+    pop; 
 } 
 
 void docon(void)
@@ -662,10 +549,10 @@ void minn(void)
 {   if (top < stack[(unsigned char)S]) (unsigned char)S--;
   else pop; }
 
-void audio(void)
-{  WP=top; pop;
-   ledcWriteTone(WP,top);
-   pop;
+void audio(void) {
+  WP=top; pop;
+  // TODO WP, top
+  pop;
 }
 
 void sendPacket(void)
@@ -678,25 +565,27 @@ void poke(void)
 void peeek(void)
 {   Pointer = (long*)top; top = *Pointer;  }
 
-void adc(void)
-{  top= (long) analogRead(top); }
-
-void pin(void)
-{  WP=top; pop;
-   ledcAttachPin(top,WP);
-   pop;
+void adc(void) {
+  // TODO
+  top= (long) 0;
 }
 
-void duty(void)
-{  WP=top; pop;
-   ledcAnalogWrite(WP,top,255);
-   pop;
+void pin(void) {
+  WP=top; pop;
+  // TODO top, WP 
+  pop;
 }
 
-void freq(void)
-{  WP=top; pop;
-   ledcSetup(WP,top,13);
-   pop;
+void duty(void) {
+  WP=top; pop;
+  // TODO top, WP
+  pop;
+}
+
+void freq(void) {
+  WP=top; pop;
+  // TODO: WP, top
+  pop;
 }
 
 void (*primitives[72])(void) = {
@@ -846,187 +735,21 @@ int as_pin=69;
 int as_duty=70;
 int as_freq=71;
 
-//void evaluate()
-//{ while (true){
-//    bytecode=(unsigned char)cData[P++];
-//    if (bytecode) {primitives[bytecode]();}
-//    else {break;} 
-//  }                 // break on NOP
-//}
-  
-__thread int counter = 0;
-void evaluate()
-{ while (true){
-    if (counter++ > 10000) {
-      delay(1);
-      counter = 0;
-    }
+void evaluate() {
+  while (true) {
     bytecode=(unsigned char)cData[P++];
     if (bytecode) {primitives[bytecode]();}
-    else {break;}
-  }                 // break on NOP
-}
-
-static const char *index_html =
-"<!html>\n"
-"<head>\n"
-"<title>esp32forth</title>\n"
-"<style>\n"
-"body {\n"
-"  padding: 5px;\n"
-"  background-color: #111;\n"
-"  color: #2cf;\n"
-"}\n"
-"#prompt {\n"
-"  width: 100%;\n"
-"  padding: 5px;\n"
-"  font-family: monospace;\n"
-"  background-color: #ff8;\n"
-"}\n"
-"#output {\n"
-"  width: 100%;\n"
-"  height: 80%;\n"
-"  resize: none;\n"
-"}\n"
-"</style>\n"
-"</head>\n"
-"<h2>esp32forth</h2>\n"
-"<link rel=\"icon\" href=\"data:,\">\n"
-"<body>\n"
-"Upload File: <input id=\"filepick\" type=\"file\" name=\"files[]\"></input><br/>\n"
-"<button onclick=\"ask('hex')\">hex</button>\n"
-"<button onclick=\"ask('decimal')\">decimal</button>\n"
-"<button onclick=\"ask('words')\">words</button>\n"
-"<button onclick=\"ask('$100 init hush')\">init</button>\n"
-"<button onclick=\"ask('ride')\">ride</button>\n"
-"<button onclick=\"ask('blow')\">blow</button>\n"
-"<button onclick=\"ask('$50000 p0')\">fore</button>\n"
-"<button onclick=\"ask('$a0000 p0')\">back</button>\n"
-"<button onclick=\"ask('$10000 p0')\">left</button>\n"
-"<button onclick=\"ask('$40000 p0')\">right</button>\n"
-"<button onclick=\"ask('$90000 p0')\">spin</button>\n"
-"<button onclick=\"ask('0 p0')\">stop</button>\n"
-"<button onclick=\"ask('4 p0s')\">LED</button>\n"
-"<button onclick=\"ask('$24 ADC . $27 ADC . $22 ADC . $23 ADC .')\">ADC</button>\n"
-"<br/>\n"
-"<textarea id=\"output\" readonly></textarea>\n"
-"<input id=\"prompt\" type=\"prompt\"></input><br/>\n"
-"<script>\n"
-"var prompt = document.getElementById('prompt');\n"
-"var filepick = document.getElementById('filepick');\n"
-"var output = document.getElementById('output');\n"
-"function httpPost(url, items, callback) {\n"
-"  var fd = new FormData();\n"
-"  for (k in items) {\n"
-"    fd.append(k, items[k]);\n"
-"  }\n"
-"  var r = new XMLHttpRequest();\n"
-"  r.onreadystatechange = function() {\n"
-"    if (this.readyState == XMLHttpRequest.DONE) {\n"
-"      if (this.status === 200) {\n"
-"        callback(this.responseText);\n"
-"      } else {\n"
-"        callback(null);\n"
-"      }\n"
-"    }\n"
-"  };\n"
-"  r.open('POST', url);\n"
-"  r.send(fd);\n"
-"}\n"
-"function ask(cmd, callback) {\n"
-"  httpPost('/input',\n"
-"           {cmd: cmd + '\\n'}, function(data) {\n"
-"    if (data !== null) { output.value += data; }\n"
-"    output.scrollTop = output.scrollHeight;  // Scroll to the bottom\n"
-"    if (callback !== undefined) { callback(); }\n"
-"  });\n"
-"}\n"
-"prompt.onkeyup = function(event) {\n"
-"  if (event.keyCode === 13) {\n"
-"    event.preventDefault();\n"
-"    ask(prompt.value);\n"
-"    prompt.value = '';\n"
-"  }\n"
-"};\n"
-"filepick.onchange = function(event) {\n"
-"  if (event.target.files.length > 0) {\n"
-"    var reader = new FileReader();\n"
-"    reader.onload = function(e) {\n"
-"      var parts = e.target.result.split('\\n');\n"
-"      function upload() {\n"
-"        if (parts.length === 0) { filepick.value = ''; return; }\n"
-"        ask(parts.shift(), upload);\n"
-"      }\n"
-"      upload();\n"
-"    }\n"
-"    reader.readAsText(event.target.files[0]);\n"
-"  }\n"
-"};\n"
-"window.onload = function() {\n"
-"  ask('');\n"
-"  prompt.focus();\n"
-"};\n"
-"</script>\n"
-;
-
-static void returnFail(String msg) {
-  server.send(500, "text/plain", msg + "\r\n");
-}
-
-static void handleInput() {
-  if (!server.hasArg("cmd")) {
-    return returnFail("Missing Input");
+    else {break;} 
   }
-  HTTPin = server.arg("cmd");
-  HTTPout = "";
-  Serial.println(HTTPin);  // line cleaned up
-  len = HTTPin.length();
-  HTTPin.getBytes(cData, len);
-  //Serial.println("Enter Forth.");
-  data[0x66] = 0;                   // >IN
-  data[0x67] = len;                 // #TIB
-  data[0x68] = 0;                   // 'TIB
-  if (len > 3 && memcmp(cData, "bg ", 3) == 0) {
-    if (background_thread) {
-      vTaskDelete(background_thread);
-      background_thread = 0;
-    }
-    data[0x66] = 3; // Skip "bg "
-    // Start background thread 1024 byte stack.
-    xTaskCreate(background, "background", 1024, &IP, tskIDLE_PRIORITY, &background_thread);
-  } else {
-    P = 0x180;                        // EVAL
-    WP = 0x184;
-    evaluate();
-  }
-//  Serial.println();
-//  Serial.println("Return from Forth.");           // line cleaned up
-//  Serial.print("Returning ");
-  Serial.print(HTTPout.length());
-//  Serial.println(" characters");
-  server.setContentLength(HTTPout.length());
-  server.send(200, "text/plain", HTTPout);
 }
-
-void background(void *ipp) {
-  long *ipv = (long*) ipp;
-  rack = rack_background;
-  stack = stack_background;
-  Serial.println("background!!");
-  IP = *ipv;
-  S = 0;
-  R = 0;
-  top = 0;
+  
+static void run() {
   P = 0x180;                        // EVAL
   WP = 0x184;
   evaluate();
-  for(;;) {
-  }
 }
 
-void app_main(void)
-  rack = rack_main;
-  stack = stack_main;
+void app_main(void) {
   P = 0x180;
   WP = 0x184;
   IP = 0;
@@ -1034,38 +757,6 @@ void app_main(void)
   R = 0;
   top = 0;
   cData = (uint8_t *) data;
-  Serial.begin(115200);
-  delay(100);
-  WiFi.config(ip, gateway, subnet);
-//  WiFi.mode(WIFI_STA);
-// attempt to connect to Wifi network:
-  WiFi.begin(ssid, pass);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.localIP());
-  // if you get a connection, report back via serial:
-  server.begin();
-  Serial.println("Booting esp32Forth v6.3 ...");
-
-// Setup timer and attach timer to a led pin
-  ledcSetup(0, 100, LEDC_TIMER_13_BIT);
-  ledcAttachPin(5, 0);
-  ledcAnalogWrite(0, 250, brightness);
-  pinMode(2,OUTPUT);
-  digitalWrite(2, HIGH);   // turn the LED2 on 
-  pinMode(16,OUTPUT);
-  digitalWrite(16, LOW);   // motor1 forward
-  pinMode(17,OUTPUT);
-  digitalWrite(17, LOW);   // motor1 backward 
-  pinMode(18,OUTPUT);
-  digitalWrite(18, LOW);   // motor2 forward 
-  pinMode(19,OUTPUT);
-  digitalWrite(19, LOW);   // motor2 bacward
 
   IP=512;
   R=0;
@@ -1652,19 +1343,14 @@ void app_main(void)
   HEADER(9,"IMMEDIATE");
   int IMMED=COLON(6,DOLIT,0x80,LAST,AT,PSTOR,EXITT);
   int ENDD=IP;
-  Serial.println();
-  Serial.print("IP=");
-  Serial.print(IP);
-  Serial.print(" R-stack= ");
-  Serial.print(popR<<2,HEX);
   IP=0x180;
   int USER=LABEL(16,6,EVAL,0,0,0,0,0,0,0,0x10,IMMED-12,ENDD,IMMED-12,INTER,EVAL,0);
 
-// dump dictionary
   IP=0;
-  for (len=0;len<0x120;len++){CheckSum();}
+  run();
 
 // compile \data\load.txt  
+#if 0
   if(!SPIFFS.begin(true)){Serial.println("Error mounting SPIFFS"); }
   File file = SPIFFS.open("/load.txt");
   if(file) {
@@ -1682,15 +1368,6 @@ void app_main(void)
     file.close();
     SPIFFS.end();
   }
-  // Setup web server handlers
-  server.on("/", HTTP_GET, []() {
-    server.send(200, "text/html", index_html);
-  });
-  server.on("/input", HTTP_POST, handleInput);
-  server.begin();
-  Serial.println("HTTP server started");
+#endif
 }
 
-void loop() {
-  server.handleClient();
-}
