@@ -5,10 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_system.h"
-#include "esp_spi_flash.h"
+#ifdef esp32
+#  include "freertos/FreeRTOS.h"
+#  include "freertos/task.h"
+#  include "esp_system.h"
+#  include "esp_spi_flash.h"
+#endif
 
 # define  FALSE 0
 # define  TRUE  -1
@@ -736,7 +738,7 @@ int as_duty=70;
 int as_freq=71;
 
 void evaluate() {
-  while (true) {
+  for(;;) {
     bytecode=(unsigned char)cData[P++];
     if (bytecode) {primitives[bytecode]();}
     else {break;} 
@@ -749,7 +751,11 @@ static void run() {
   evaluate();
 }
 
+#ifdef esp32
 void app_main(void) {
+#else
+int main(void) {
+#endif
   P = 0x180;
   WP = 0x184;
   IP = 0;
