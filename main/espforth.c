@@ -1,60 +1,10 @@
-/******************************************************************************/
-/* esp32Forth, Version 6.3 : for NodeMCU ESP32S                                 */
-/******************************************************************************/
-/* 16jun25cht  _63                                                            */
-/* web server                                                                */
-/* 16jun19cht  _62                                                            */
-/* structures                                                                 */
-/* 14jun19cht  _61                                                            */
-/* macro assembler with labels                                                */
-/* 10may19cht  _54                                                            */
-/* robot tests                                                                */
-/* 21jan19cht  _51                                                            */
-/* 8 channel electronic organ                                                 */
-/* 15jan19cht  _50                                                            */
-/* Clean up for AIR robot                                                     */
-/* 03jan19cht  _47-49                                                         */
-/* Move to ESP32                                                              */
-/* 07jan19cht  _46                                                            */
-/* delete UDP                                                                 */
-/* 03jan19cht  _45                                                            */
-/* Move to NodeMCU ESP32S Kit                                                 */
-/* 18jul17cht  _44                                                            */
-/* Byte code sequencer                                                        */
-/* 14jul17cht  _43                                                            */
-/* Stacks in circular buffers                                                 */
-/* 01jul17cht  _42                                                            */
-/* Compiled as an Arduino sketch                                              */
-/* 20mar17cht  _41                                                            */
-/* Compiled as an Arduino sketch                                              */
-/* Follow the ceForth model with 64 primitives                                */
-/* Serial Monitor at 115200 baud                                              */
-/* Send and receive UDP packets in parallel with Serial Monitor               */
-/* Case insensitive interpreter                                               */
-/* data[] must be filled with rom42.h eForth dictionary                       */
-/* 22jun17cht                                                                 */
-/* Stacks are 256 cell circular buffers, with byte pointers R and S           */
-/* All references to R and S are forced to (unsigned char)                    */
-/* All multiply-divide words cleaned up                                       */
-/******************************************************************************/
+// esp32 Forth, based on Version 6.3
 
-#include "SPIFFS.h"
-#include <WiFi.h>
-#include <WebServer.h>
-#include "SPIFFS.h"
-
-const char* ssid = "SVFIG";//type your ssid
-const char* pass = "12345678";//type your password
-// static ip address
-IPAddress ip(192,168,1,201); 
-IPAddress gateway(192,168,1,1);
-IPAddress subnet(255,255,255,0);
-
-WebServer server(80);
-
-/******************************************************************************/
-/* esp32Forth_51                                                              */
-/******************************************************************************/
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_system.h"
+#include "esp_spi_flash.h"
 
 # define  FALSE 0
 # define  TRUE  -1
@@ -69,13 +19,13 @@ long rack_main[256] = {0};
 long stack_main[256] = {0};
 long rack_background[256] = {0};
 long stack_background[256] = {0};
-__thread long *rack;
-__thread long *stack;
-__thread unsigned char R, S, bytecode ;
-__thread long* Pointer ;
-__thread long  P, IP, WP, top, links, len ;
+long *rack;
+long *stack;
+unsigned char R, S, bytecode ;
+long* Pointer ;
+long  P, IP, WP, top, links, len ;
 uint8_t* cData ;
-__thread long long int d, n, m ;
+long long int d, n, m ;
 String HTTPin;
 String HTTPout;
 TaskHandle_t background_thread;
@@ -1073,8 +1023,8 @@ void background(void *ipp) {
   for(;;) {
   }
 }
-void setup() {
-  
+
+void app_main(void)
   rack = rack_main;
   stack = stack_main;
   P = 0x180;
