@@ -301,8 +301,8 @@ void accep() {
 }
 
 void qrx(void) {
-    push fgetc(stdin);
-    push -1;
+  push fgetc(stdin);
+  push -1;
 }
 
 void txsto(void) {
@@ -1347,6 +1347,7 @@ void app_main(void) {
   int USER=LABEL(16,6,EVAL,0,0,0,0,0,0,0,0x10,IMMED-12,ENDD,IMMED-12,INTER,EVAL,0);
 
   IP=0;
+  printf("espforth\n");
   run();
 
 // compile \data\load.txt  
