@@ -1,2 +1,2 @@
-idf_component_register(SRCS "espforth.cc"
+idf_component_register(SRCS "espforth.c"
                        INCLUDE_DIRS "")
