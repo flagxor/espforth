@@ -715,11 +715,11 @@ void pin(void)
 {  WP=top; pop;
    //ledcAttachPin(top,WP);
 #ifdef esp32
-   gpio_pad_select_gpio(top);
-   gpio_set_direction(top, GPIO_MODE_OUTPUT);
-   gpio_set_level(top, WP);
-   pop;
+   gpio_pad_select_gpio(WP);
+   gpio_set_direction(WP, GPIO_MODE_OUTPUT);
+   gpio_set_level(WP, top);
 #endif
+   pop;
 }
 
 void duty(void)
