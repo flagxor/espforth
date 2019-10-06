@@ -740,17 +740,20 @@ int as_freq=71;
 
 void evaluate() {
   for (;;) {
+/*
     printf("ok\n");
     char *s = fgets(cData, 256, stdin);
     len = strlen(s);
     data[0x66] = 0;                   // >IN
     data[0x67] = len;                 // #TIB
     data[0x68] = 0;                   // 'TIB
-    P = 0x180;                        // EVAL
+    IP = 0x180;                        // EVAL
     WP = 0x184;
+*/
     for (;;) {
-      bytecode=(unsigned char)cData[P++];
-printf("%d ", bytecode);
+printf("%x:", IP);
+      bytecode=(unsigned char)cData[IP++];
+printf("%d\n", bytecode);
       if (bytecode) {
         primitives[bytecode]();
       } else {
@@ -761,8 +764,6 @@ printf("%d ", bytecode);
 }
 
 static void run() {
-  P = 0x180;                        // EVAL
-  WP = 0x184;
   evaluate();
 }
 
@@ -771,9 +772,6 @@ void app_main(void) {
 #else
 int main(void) {
 #endif
-  P = 0x180;
-  WP = 0x184;
-  IP = 0;
   S = 0;
   R = 0;
   top = 0;
@@ -1257,7 +1255,7 @@ int main(void) {
   THEN(1,ERRORR);
   HEADER(4,"COLD");
   int COLD=COLON(1,CR);
-  DOTQ("esp32forth V6.3, 2019 ");
+  DOTQ("esp32forth, AIBOT");
   int DOTQ1=LABEL(2,CR,EXITT);
   HEADER(4,"LINE");
   int LINE=COLON(2,DOLIT,0x7);
@@ -1365,10 +1363,14 @@ int main(void) {
   int IMMED=COLON(6,DOLIT,0x80,LAST,AT,PSTOR,EXITT);
   int ENDD=IP;
   IP=0x180;
-  int USER=LABEL(16,6,EVAL,0,0,0,0,0,0,0,0x10,IMMED-12,ENDD,IMMED-12,INTER,EVAL,0);
+  //int USER=LABEL(16,6,EVAL,0,0,0,0,0,0,0,0x10,IMMED-12,ENDD,IMMED-12,INTER,EVAL,0);
+  int USER=LABEL(3,6,COLD,0);
 
-  IP=0;
+printf("%d\n", sizeof(long));
+printf("%x\n", COLD);
   printf("espforth\n");
+  IP = COLD;
+  WP = COLD + 4;
   run();
 
 // compile \data\load.txt
