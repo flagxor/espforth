@@ -304,6 +304,7 @@ void AFT(int len, ... ) {
   data[P++]=BRAN; 
   data[P++]=0; 
   k=popR;
+  (void)k;
   pushR=P;
   pushR=P-1;
   va_list argList;
@@ -399,7 +400,7 @@ void next(void)
 
 void accep()
 /* WiFiClient */
-{ char *s = fgets(cData, top, stdin);
+{ char *s = fgets((char*)cData, top, stdin);
   len = strlen(s);
   fwrite(cData, 1, len, stdout);
   top = len;
@@ -856,7 +857,7 @@ static void run() {
   printf("\n");
   printf("AIBOT\n");
   for (;;) {
-    char *s = fgets(cData, 255, stdin);
+    char *s = fgets((char*)cData, 255, stdin);
     len = strlen(s);
     //Serial.println("Enter Forth.");
     data[0x66] = 0;                   // >IN
@@ -866,29 +867,6 @@ static void run() {
     WP = 0x184;
     evaluate();
   }
-}
-
-static void configHardware(void) {
-#ifdef esp32
-    /*
-     * Prepare and set configuration of timers
-     * that will be used by LED Controller
-     */
-    ledc_timer_config_t ledc_timer = {
-        .duty_resolution = LEDC_TIMER_13_BIT, // resolution of PWM duty
-        .freq_hz = 5000,                      // frequency of PWM signal
-        .speed_mode = LEDC_HS_MODE,           // timer mode
-        .timer_num = LEDC_HS_TIMER,            // timer index
-        .clk_cfg = LEDC_AUTO_CLK,              // Auto select the source clock
-    };
-    // Set configuration of timer0 for high speed channels
-    ledc_timer_config(&ledc_timer);
-
-    // Prepare and set configuration of timer1 for low speed channels
-    ledc_timer.speed_mode = LEDC_LS_MODE;
-    ledc_timer.timer_num = LEDC_LS_TIMER;
-    ledc_timer_config(&ledc_timer);
-#endif
 }
 
 #ifdef esp32
@@ -1518,7 +1496,6 @@ int main(void) {
   IP=0;
   for (len=0;len<0x120;len++){CheckSum();}
 
-  configHardware();
   run();
 }
 
