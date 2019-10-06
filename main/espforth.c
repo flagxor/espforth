@@ -31,6 +31,7 @@ long long int d, n, m ;
 
 int BRAN=0,QBRAN=0,DONXT=0,DOTQP=0,STRQP=0,TOR=0,ABORQP=0;
 
+//#include "rom_54.h" /* load dictionary */
 long data[16000] = {};
 int IMEDD=0x80;
 int COMPO=0x40;
@@ -41,11 +42,19 @@ void HEADER(int lex, char seq[]) {
   int len=lex&31;
   data[P++]=links;
   IP=P<<2;
+  printf("\n");
+  printf("%lx", links);
+  for (i=links>>2;i<P;i++)
+     {printf(" "); printf("%lx", data[i]);}
   links=IP;
   cData[IP++]=lex;
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
   while (IP&3) {cData[IP++]=0;}
+  printf("\n");
+  printf("%s", seq);
+  printf(" ");
+  printf("%lx", IP);
 }
 int CODE(int len, ... ) {
   int addr=IP;
@@ -55,6 +64,8 @@ int CODE(int len, ... ) {
   for(; len;len--) {
     s= va_arg(argList, int);
     cData[IP++]=s;
+    printf(" ");
+    printf("%x", s);
   }
   va_end(argList);
   return addr;
@@ -65,9 +76,15 @@ int COLON(int len, ... ) {
   data[P++]=6; // dolist
   va_list argList;
   va_start(argList, len);
+  printf("\n");
+  printf("%x", addr);
+  printf(" ");
+  printf("6");
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+    printf(" ");
+    printf("%x", j);
   }
   IP=P<<2;
   va_end(argList);
@@ -78,9 +95,13 @@ int LABEL(int len, ... ) {
   P=IP>>2;
   va_list argList;
   va_start(argList, len);
+  printf("\n");
+  printf("%x", addr);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+    printf(" ");
+    printf("%x", j);
   }
   IP=P<<2;
   va_end(argList);
@@ -88,38 +109,53 @@ int LABEL(int len, ... ) {
   }
 void BEGIN(int len, ... ) {
   P=IP>>2;
+  printf("\n");
+  printf("%lx", IP);
+  printf(" BEGIN ");
   pushR=P;
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+    printf(" ");
+    printf("%x", j);
   }
   IP=P<<2;
   va_end(argList);
 }
 void AGAIN(int len, ... ) {
   P=IP>>2;
-  data[P++]=BRAN;
-  data[P++]=popR<<2;
+  printf("\n");
+  printf("%lx", IP);
+  printf(" AGAIN ");
+  data[P++]=BRAN; 
+  data[P++]=popR<<2; 
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+    printf(" ");
+    printf("%x", j);
   }
   IP=P<<2;
   va_end(argList);
   }
 void UNTIL(int len, ... ) {
   P=IP>>2;
-  data[P++]=QBRAN;
-  data[P++]=popR<<2;
+  printf("\n");
+  printf("%lx", IP);
+  printf(" UNTIL ");
+  data[P++]=QBRAN; 
+  data[P++]=popR<<2; 
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+    printf(" ");
+    printf("%x", j);
   }
   IP=P<<2;
   va_end(argList);
@@ -127,8 +163,11 @@ void UNTIL(int len, ... ) {
 void WHILE(int len, ... ) {
   P=IP>>2;
   int k;
-  data[P++]=QBRAN;
-  data[P++]=0;
+  printf("\n");
+  printf("%lx", IP);
+  printf(" WHILE ");
+  data[P++]=QBRAN; 
+  data[P++]=0; 
   k=popR;
   pushR=(P-1);
   pushR=k;
@@ -137,98 +176,132 @@ void WHILE(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+    printf(" ");
+    printf("%x", j);
   }
   IP=P<<2;
   va_end(argList);
   }
 void REPEAT(int len, ... ) {
   P=IP>>2;
-  data[P++]=BRAN;
-  data[P++]=popR<<2;
+  printf("\n");
+  printf("%lx", IP);
+  printf(" REPEAT ");
+  data[P++]=BRAN; 
+  data[P++]=popR<<2; 
   data[popR]=P<<2;
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+    printf(" ");
+    printf("%x", j);
   }
   IP=P<<2;
   va_end(argList);
   }
 void IF(int len, ... ) {
   P=IP>>2;
-  data[P++]=QBRAN;
+  printf("\n");
+  printf("%lx", IP);
+  printf(" IF ");
+  data[P++]=QBRAN; 
   pushR=P;
-  data[P++]=0;
+  data[P++]=0; 
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+    printf(" ");
+    printf("%x", j);
   }
   IP=P<<2;
   va_end(argList);
   }
 void ELSE(int len, ... ) {
   P=IP>>2;
-  data[P++]=BRAN;
-  data[P++]=0;
-  data[popR]=P<<2;
+  printf("\n");
+  printf("%lx", IP);
+  printf(" ELSE ");
+  data[P++]=BRAN; 
+  data[P++]=0; 
+  data[popR]=P<<2; 
   pushR=P-1;
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+    printf(" ");
+    printf("%x", j);
   }
   IP=P<<2;
   va_end(argList);
   }
 void THEN(int len, ... ) {
   P=IP>>2;
-  data[popR]=P<<2;
+  printf("\n");
+  printf("%lx", IP);
+  printf(" THEN ");
+  data[popR]=P<<2; 
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+    printf(" ");
+    printf("%x", j);
   }
   IP=P<<2;
   va_end(argList);
   }
 void FOR(int len, ... ) {
   P=IP>>2;
-  data[P++]=TOR;
+  printf("\n");
+  printf("%lx", IP);
+  printf(" FOR ");
+  data[P++]=TOR; 
   pushR=P;
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+    printf(" ");
+    printf("%x", j);
   }
   IP=P<<2;
   va_end(argList);
   }
 void NEXT(int len, ... ) {
   P=IP>>2;
-  data[P++]=DONXT;
-  data[P++]=popR<<2;
+  printf("\n");
+  printf("%lx", IP);
+  printf(" NEXT ");
+  data[P++]=DONXT; 
+  data[P++]=popR<<2; 
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+    printf(" ");
+    printf("%x", j);
   }
   IP=P<<2;
   va_end(argList);
   }
 void AFT(int len, ... ) {
   P=IP>>2;
-  data[P++]=BRAN;
-  data[P++]=0;
   int k;
-  k = popR;
-  (void) k;
+  printf("\n");
+  printf("%lx", IP);
+  printf(" AFT ");
+  data[P++]=BRAN; 
+  data[P++]=0; 
+  k=popR;
   pushR=P;
   pushR=P-1;
   va_list argList;
@@ -236,6 +309,8 @@ void AFT(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+    printf(" ");
+    printf("%x", j);
   }
   IP=P<<2;
   va_end(argList);
@@ -250,6 +325,10 @@ void DOTQ(char seq[]) {
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
   while (IP&3) {cData[IP++]=0;}
+  printf("\n");
+  printf("%lx", IP);
+  printf(" ");
+  printf("%s", seq);
 }
 void STRQ(char seq[]) {
   P=IP>>2;
@@ -261,6 +340,10 @@ void STRQ(char seq[]) {
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
   while (IP&3) {cData[IP++]=0;}
+  printf("\n");
+  printf("%lx", IP);
+  printf(" ");
+  printf("%s", seq);
 }
 void ABORQ(char seq[]) {
   P=IP>>2;
@@ -272,8 +355,23 @@ void ABORQ(char seq[]) {
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
   while (IP&3) {cData[IP++]=0;}
+  printf("\n");
+  printf("%lx", IP);
+  printf(" ");
+  printf("%s", seq);
 }
 
+void CheckSum() {
+  int i;
+  char sum=0;
+  printf("\n");
+  printf("%lx ",IP);
+  for (i=0;i<32;i++) {
+    sum += cData[IP];
+    printf("%2x",cData[IP++]);
+  }
+  printf(" %2x",sum);
+}
 /******************************************************************************/
 /* ledc                                                                       */
 /******************************************************************************/
@@ -294,24 +392,25 @@ int brightness = 255;    // how bright the LED is
 
 void next(void)
 { P = data[IP>>2];
-  IP += 4;
+  IP += 4; 
   WP = P+4;  }
 
-void accep() {
-  int len = fread(cData, 1, top, stdin);
+void accep()
+/* WiFiClient */
+{ char *s = fgets(cData, top, stdin);
+  len = strlen(s);
+  fwrite(cData, 1, len, stdout);
   top = len;
 }
+void qrx(void)
+  { push fgetc(stdin);
+    push -1; }
 
-void qrx(void) {
-  push fgetc(stdin);
-  push -1;
-}
-
-void txsto(void) {
-  char c=top;
-  fputc(c, stdin);
-  pop;
-}
+void txsto(void)
+{  char c=top;
+   fputc(c, stdout);
+   pop; 
+} 
 
 void docon(void)
 {  push data[WP>>2]; }
@@ -323,7 +422,7 @@ void dolit(void)
 
 void dolist(void)
 {   rack[(unsigned char)++R] = IP;
-  IP = WP;
+  IP = WP; 
   next(); }
 
 void exitt(void)
@@ -338,17 +437,17 @@ void execu(void)
 void donext(void)
 {   if(rack[(unsigned char)R]) {
     rack[(unsigned char)R] -= 1 ;
-    IP = data[IP>>2];
+    IP = data[IP>>2]; 
   } else { IP += 4;  (unsigned char)R-- ;  }
   next(); }
 
 void qbran(void)
-{   if(top == 0) IP = data[IP>>2];
-  else IP += 4;  pop;
+{   if(top == 0) IP = data[IP>>2]; 
+  else IP += 4;  pop; 
   next(); }
 
 void bran(void)
-{   IP = data[IP>>2];
+{   IP = data[IP>>2]; 
   next(); }
 
 void store(void)
@@ -408,10 +507,10 @@ void xorr(void)
 
 void uplus(void)
 {   stack[(unsigned char)S] += top;
-  top = LOWER(stack[(unsigned char)S], top);  }
+  top = LOWER(stack[(unsigned char)S], top);  } 
 
 void nop(void)
-{   next(); }
+{   next(); } 
 
 void qdup(void)
 {   if(top) stack[(unsigned char)++S] = top ;  }
@@ -440,7 +539,7 @@ void negat(void)
 void dnega(void)
 {   inver();
   tor();
-  inver();
+  inver(); 
   push 1;
   uplus();
   rfrom();
@@ -551,52 +650,51 @@ void minn(void)
 {   if (top < stack[(unsigned char)S]) (unsigned char)S--;
   else pop; }
 
-void audio(void) {
-  WP=top; pop;
-  // TODO WP, top
-  pop;
+void audio(void)
+{  WP=top; pop;
+   // ledcWriteTone(WP,top);
+   pop;
 }
 
-void sendPacket(void) {
-}
+void sendPacket(void)
+{}
 
-void poke(void) {
-    Pointer = (long*)top; *Pointer = stack[(unsigned char)S--];
-    pop;
-}
+void poke(void)
+{   Pointer = (long*)top; *Pointer = stack[(unsigned char)S--];
+    pop;  }
 
 void peeek(void)
 {   Pointer = (long*)top; top = *Pointer;  }
 
 void adc(void) {
-  // TODO
+  //top= (long) analogRead(top);
   top= (long) 0;
 }
 
-void pin(void) {
-  WP=top; pop;
-  // TODO top, WP
-  pop;
+void pin(void)
+{  WP=top; pop;
+   //ledcAttachPin(top,WP);
+   pop;
 }
 
-void duty(void) {
-  WP=top; pop;
-  // TODO top, WP
-  pop;
+void duty(void)
+{  WP=top; pop;
+   //ledcAnalogWrite(WP,top,255);
+   pop;
 }
 
-void freq(void) {
-  WP=top; pop;
-  // TODO: WP, top
-  pop;
+void freq(void)
+{  WP=top; pop;
+   //ledcSetup(WP,top,13);
+   pop;
 }
 
 void (*primitives[72])(void) = {
     /* case 0 */ nop,
-    /* case 1 */ accep,
-    /* case 2 */ qrx,
-    /* case 3 */ txsto,
-    /* case 4 */ docon,
+    /* case 1 */ accep, 
+    /* case 2 */ qrx,    
+    /* case 3 */ txsto,  
+    /* case 4 */ docon,   
     /* case 5 */ dolit,
     /* case 6 */ dolist,
     /* case 7 */ exitt,
@@ -613,7 +711,7 @@ void (*primitives[72])(void) = {
     /* case 18 */ rfrom,
     /* case 19 */ rat,
     /* case 20 */ tor,
-    /* case 21 */ nop,
+    /* case 21 */ nop, 
     /* case 22 */ nop,
     /* case 23 */ drop,
     /* case 24 */ dup,
@@ -624,45 +722,45 @@ void (*primitives[72])(void) = {
     /* case 29 */ orr,
     /* case 30 */ xorr,
     /* case 31 */ uplus,
-    /* case 32 */ next,
-    /* case 33 */ qdup,
-    /* case 34 */ rot,
-    /* case 35 */ ddrop,
-    /* case 36 */ ddup,
+    /* case 32 */ next, 
+    /* case 33 */ qdup, 
+    /* case 34 */ rot, 
+    /* case 35 */ ddrop, 
+    /* case 36 */ ddup, 
     /* case 37 */ plus,
-    /* case 38 */ inver,
-    /* case 39 */ negat,
-    /* case 40 */ dnega,
-    /* case 41 */ subb,
+    /* case 38 */ inver, 
+    /* case 39 */ negat, 
+    /* case 40 */ dnega, 
+    /* case 41 */ subb, 
     /* case 42 */ abss,
-    /* case 43 */ equal,
-    /* case 44 */ uless,
-    /* case 45 */ less,
+    /* case 43 */ equal, 
+    /* case 44 */ uless, 
+    /* case 45 */ less,   
     /* case 46 */ ummod,
     /* case 47 */ msmod,
-    /* case 48 */ slmod,
-    /* case 49 */ mod,
-    /* case 50 */ slash,
-    /* case 51 */ umsta,
-    /* case 52 */ star,
-    /* case 53 */ mstar,
-    /* case 54 */ ssmod,
-    /* case 55 */ stasl,
-    /* case 56 */ pick,
-    /* case 57 */ pstor,
-    /* case 58 */ dstor,
-    /* case 59 */ dat,
-    /* case 60 */ count,
-    /* case 61 */ dovar,
-    /* case 62 */ maxx,
+    /* case 48 */ slmod, 
+    /* case 49 */ mod,  
+    /* case 50 */ slash, 
+    /* case 51 */ umsta,   
+    /* case 52 */ star, 
+    /* case 53 */ mstar, 
+    /* case 54 */ ssmod, 
+    /* case 55 */ stasl, 
+    /* case 56 */ pick, 
+    /* case 57 */ pstor, 
+    /* case 58 */ dstor, 
+    /* case 59 */ dat, 
+    /* case 60 */ count, 
+    /* case 61 */ dovar, 
+    /* case 62 */ maxx, 
     /* case 63 */ minn,
     /* case 64 */ audio,
     /* case 65 */ sendPacket,
     /* case 66 */ poke,
-    /* case 67 */ peeek,
+    /* case 67 */ peeek, 
     /* case 68 */ adc,
     /* case 69 */ pin,
-    /* case 70 */ duty,
+    /* case 70 */ duty, 
     /* case 71 */ freq };
 
 int as_nop=0;
@@ -738,33 +836,29 @@ int as_pin=69;
 int as_duty=70;
 int as_freq=71;
 
-void evaluate() {
-  for (;;) {
-/*
-    printf("ok\n");
-    char *s = fgets(cData, 256, stdin);
-    len = strlen(s);
-    data[0x66] = 0;                   // >IN
-    data[0x67] = len;                 // #TIB
-    data[0x68] = 0;                   // 'TIB
-    IP = 0x180;                        // EVAL
-    WP = 0x184;
-*/
-    for (;;) {
-printf("%x:", IP);
-      bytecode=(unsigned char)cData[IP++];
-printf("%d\n", bytecode);
-      if (bytecode) {
-        primitives[bytecode]();
-      } else {
-        break;
-      }
-    }
+void evaluate()
+{
+  for(;;) {
+    bytecode=(unsigned char)cData[P++];
+    if (bytecode) primitives[bytecode]();
+    else break;
   }
 }
 
 static void run() {
-  evaluate();
+  printf("\n");
+  printf("AIBOT\n");
+  for (;;) {
+    char *s = fgets(cData, 255, stdin);
+    len = strlen(s);
+    //Serial.println("Enter Forth.");
+    data[0x66] = 0;                   // >IN
+    data[0x67] = len;                 // #TIB
+    data[0x68] = 0;                   // 'TIB
+    P = 0x180;                        // EVAL
+    WP = 0x184;
+    evaluate();
+  }
 }
 
 #ifdef esp32
@@ -772,10 +866,30 @@ void app_main(void) {
 #else
 int main(void) {
 #endif
+  P = 0x180;
+  WP = 0x184;
+  IP = 0;
   S = 0;
   R = 0;
   top = 0;
   cData = (uint8_t *) data;
+
+#if 0
+// Setup timer and attach timer to a led pin
+  ledcSetup(0, 100, LEDC_TIMER_13_BIT);
+  ledcAttachPin(5, 0);
+  ledcAnalogWrite(0, 250, brightness);
+  pinMode(2,OUTPUT);
+  digitalWrite(2, HIGH);   // turn the LED2 on 
+  pinMode(16,OUTPUT);
+  digitalWrite(16, LOW);   // motor1 forward
+  pinMode(17,OUTPUT);
+  digitalWrite(17, LOW);   // motor1 backward 
+  pinMode(18,OUTPUT);
+  digitalWrite(18, LOW);   // motor2 forward 
+  pinMode(19,OUTPUT);
+  digitalWrite(19, LOW);   // motor2 bacward
+#endif
 
   IP=512;
   R=0;
@@ -815,11 +929,11 @@ int main(void) {
   HEADER(6,"ACCEPT");
   int ACCEP=CODE(4,as_accept,as_next,0,0);
   HEADER(4,"?KEY");
-  int QKEY=CODE(4,as_qrx,as_next,0,0);
+  int QKEY=CODE(4,as_qrx,as_next,0,0);  
   HEADER(4,"EMIT");
-  int EMIT=CODE(4,as_txsto,as_next,0,0);
+  int EMIT=CODE(4,as_txsto,as_next,0,0);  
   HEADER(5,"DOLIT");
-  int DOLIT=CODE(4,as_dolit,as_next,0,0);
+  int DOLIT=CODE(4,as_dolit,as_next,0,0); 
   HEADER(6,"DOLIST");
   int DOLST=CODE(4,as_dolist,as_next,0,0);
   HEADER(4,"EXIT");
@@ -865,29 +979,29 @@ int main(void) {
   HEADER(3,"UM+");
   int UPLUS=CODE(4,as_uplus,as_next,0,0);
   HEADER(4,"?DUP");
-  int QDUP=CODE(4,as_qdup,as_next,0,0);
+  int QDUP=CODE(4,as_qdup,as_next,0,0); 
   HEADER(3,"ROT");
-  int ROT=CODE(4,as_rot,as_next,0,0);
+  int ROT=CODE(4,as_rot,as_next,0,0); 
   HEADER(5,"2DROP");
-  int DDROP=CODE(4,as_ddrop,as_next,0,0);
+  int DDROP=CODE(4,as_ddrop,as_next,0,0); 
   HEADER(4,"2DUP");
-  int DDUP=CODE(4,as_ddup,as_next,0,0);
+  int DDUP=CODE(4,as_ddup,as_next,0,0); 
   HEADER(1,"+");
   int PLUS=CODE(4,as_plus,as_next,0,0);
   HEADER(3,"NOT");
   int INVER=CODE(4,as_inver,as_next,0,0);
   HEADER(6,"NEGATE");
-  int NEGAT=CODE(4,as_negat,as_next,0,0);
+  int NEGAT=CODE(4,as_negat,as_next,0,0); 
   HEADER(7,"DNEGATE");
-  int DNEGA=CODE(4,as_dnega,as_next,0,0);
+  int DNEGA=CODE(4,as_dnega,as_next,0,0); 
   HEADER(1,"-");
-  int SUBBB=CODE(4,as_subb,as_next,0,0);
+  int SUBBB=CODE(4,as_subb,as_next,0,0); 
   HEADER(3,"ABS");
   int ABSS=CODE(4,as_abss,as_next,0,0);
   HEADER(1,"=");
-  int EQUAL=CODE(4,as_equal,as_next,0,0);
+  int EQUAL=CODE(4,as_equal,as_next,0,0); 
   HEADER(2,"U<");
-  int ULESS=CODE(4,as_uless,as_next,0,0);
+  int ULESS=CODE(4,as_uless,as_next,0,0); 
   HEADER(1,"<");
   int LESS=CODE(4,as_less,as_next,0,0);
   HEADER(6,"UM/MOD");
@@ -895,31 +1009,31 @@ int main(void) {
   HEADER(5,"M/MOD");
   int MSMOD=CODE(4,as_msmod,as_next,0,0);
   HEADER(4,"/MOD");
-  int SLMOD=CODE(4,as_slmod,as_next,0,0);
+  int SLMOD=CODE(4,as_slmod,as_next,0,0); 
   HEADER(3,"MOD");
-  int MODD=CODE(4,as_mod,as_next,0,0);
+  int MODD=CODE(4,as_mod,as_next,0,0);   
   HEADER(1,"/");
   int SLASH=CODE(4,as_slash,as_next,0,0);
   HEADER(3,"UM*");
-  int UMSTA=CODE(4,as_umsta,as_next,0,0);
+  int UMSTA=CODE(4,as_umsta,as_next,0,0);   
   HEADER(1,"*");
-  int STAR=CODE(4,as_star,as_next,0,0);
+  int STAR=CODE(4,as_star,as_next,0,0); 
   HEADER(2,"M*");
-  int MSTAR=CODE(4,as_mstar,as_next,0,0);
+  int MSTAR=CODE(4,as_mstar,as_next,0,0); 
   HEADER(5,"*/MOD");
-  int SSMOD=CODE(4,as_ssmod,as_next,0,0);
+  int SSMOD=CODE(4,as_ssmod,as_next,0,0); 
   HEADER(2,"*/");
   int STASL=CODE(4,as_stasl,as_next,0,0);
   HEADER(4,"PICK");
-  int PICK=CODE(4,as_pick,as_next,0,0);
+  int PICK=CODE(4,as_pick,as_next,0,0); 
   HEADER(2,"+!");
-  int PSTOR=CODE(4,as_pstor,as_next,0,0);
+  int PSTOR=CODE(4,as_pstor,as_next,0,0); 
   HEADER(2,"2!");
-  int DSTOR=CODE(4,as_dstor,as_next,0,0);
+  int DSTOR=CODE(4,as_dstor,as_next,0,0); 
   HEADER(2,"2@");
   int DAT=CODE(4,as_dat,as_next,0,0);
   HEADER(5,"COUNT");
-  int COUNT=CODE(4,as_count,as_next,0,0);
+  int COUNT=CODE(4,as_count,as_next,0,0); 
   HEADER(3,"MAX");
   int MAX=CODE(4,as_max,as_next,0,0);
   HEADER(3,"MIN");
@@ -1255,7 +1369,7 @@ int main(void) {
   THEN(1,ERRORR);
   HEADER(4,"COLD");
   int COLD=COLON(1,CR);
-  DOTQ("esp32forth, AIBOT");
+  DOTQ("esp32forth V6.3, 2019 ");
   int DOTQ1=LABEL(2,CR,EXITT);
   HEADER(4,"LINE");
   int LINE=COLON(2,DOLIT,0x7);
@@ -1362,36 +1476,18 @@ int main(void) {
   HEADER(9,"IMMEDIATE");
   int IMMED=COLON(6,DOLIT,0x80,LAST,AT,PSTOR,EXITT);
   int ENDD=IP;
+  printf("\n");
+  printf("IP=");
+  printf("%lx", IP);
+  printf(" R-stack= ");
+  printf("%lx", popR<<2);
   IP=0x180;
-  //int USER=LABEL(16,6,EVAL,0,0,0,0,0,0,0,0x10,IMMED-12,ENDD,IMMED-12,INTER,EVAL,0);
-  int USER=LABEL(3,6,COLD,0);
+  int USER=LABEL(16,6,EVAL,0,0,0,0,0,0,0,0x10,IMMED-12,ENDD,IMMED-12,INTER,EVAL,0);
 
-printf("%d\n", sizeof(long));
-printf("%x\n", COLD);
-  printf("espforth\n");
-  IP = COLD;
-  WP = COLD + 4;
+// dump dictionary
+  IP=0;
+  for (len=0;len<0x120;len++){CheckSum();}
+
   run();
-
-// compile \data\load.txt
-#if 0
-  if(!SPIFFS.begin(true)){Serial.println("Error mounting SPIFFS"); }
-  File file = SPIFFS.open("/load.txt");
-  if(file) {
-    Serial.print("Load file: ");
-    len = file.read(cData+0x8000,0x7000);
-    Serial.print(len);
-    Serial.println(" bytes.");
-    data[0x66] = 0;                   // >IN
-    data[0x67] = len;                 // #TIB
-    data[0x68] = 0x8000;              // 'TIB
-    P = 0x180;                        // EVAL
-    WP = 0x184;
-    evaluate();
-    Serial.println(" Done loading.");
-    file.close();
-    SPIFFS.end();
-  }
-#endif
 }
 
