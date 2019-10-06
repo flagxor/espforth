@@ -417,10 +417,28 @@ void next(void)
   IP += 4; 
   WP = P+4;  }
 
+static int duplexread(unsigned char* dst, int sz) {
+  int len = 0;
+  while (sz > 0) {
+    int ch = fgetc(stdin);
+    dst[len++] = ch;
+#ifdef esp32
+    if (ch == '\n') {
+      fputc('\r', stdout);
+    }
+    fputc(ch, stdout);
+#endif
+    if (ch == '\n' || ch < 0) {
+      break;
+    }
+  }
+  return len;
+}
+
 void accep()
 /* WiFiClient */
-{ char *s = fgets((char*)cData, top, stdin);
-  len = strlen(s);
+{
+  len = duplexread(cData, top);
   fwrite(cData, 1, len, stdout);
   top = len;
 }
@@ -876,8 +894,7 @@ static void run() {
   printf("\n");
   printf("AIBOT\n");
   for (;;) {
-    char *s = fgets((char*)cData, 255, stdin);
-    len = strlen(s);
+    len = duplexread(cData, 255);
     //Serial.println("Enter Forth.");
     data[0x66] = 0;                   // >IN
     data[0x67] = len;                 // #TIB
