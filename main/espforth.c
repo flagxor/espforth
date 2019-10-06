@@ -12,6 +12,25 @@
 #  include "driver/gpio.h"
 #  include "driver/ledc.h"
 #  include "esp_spi_flash.h"
+#  include "esp_err.h"
+#  include "esp_vfs_dev.h"
+#  include "driver/uart.h"
+
+esp_err_t example_configure_stdin_stdout(void)
+{
+    // Initialize VFS & UART so we can use std::cout/cin
+    setvbuf(stdin, NULL, _IONBF, 0);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    /* Install UART driver for interrupt-driven reads and writes */
+    ESP_ERROR_CHECK( uart_driver_install( (uart_port_t)CONFIG_ESP_CONSOLE_UART_NUM,
+            256, 0, 0, NULL, 0) );
+    /* Tell VFS to use UART driver */
+    esp_vfs_dev_uart_use_driver(CONFIG_ESP_CONSOLE_UART_NUM);
+    esp_vfs_dev_uart_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+    /* Move the caret to the beginning of the next line on '\n' */
+    esp_vfs_dev_uart_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+    return ESP_OK;
+}
 #endif
 
 # define  FALSE 0
@@ -485,7 +504,7 @@ void spsto(void) {}
 void drop(void)
 {   pop;  }
 
-void dup(void)
+void dup_(void)
 {   stack[(unsigned char)++S] = top;  }
 
 void swap(void)
@@ -722,7 +741,7 @@ void (*primitives[72])(void) = {
     /* case 21 */ nop, 
     /* case 22 */ nop,
     /* case 23 */ drop,
-    /* case 24 */ dup,
+    /* case 24 */ dup_,
     /* case 25 */ swap,
     /* case 26 */ over,
     /* case 27 */ zless,
@@ -1496,6 +1515,9 @@ int main(void) {
   IP=0;
   for (len=0;len<0x120;len++){CheckSum();}
 
+#ifdef esp32
+  example_configure_stdin_stdout();
+#endif
   run();
 }
 
