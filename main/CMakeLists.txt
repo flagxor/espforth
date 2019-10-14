@@ -1,4 +1,4 @@
 set(COMPONENT_SRCS "espforth.c")
 set(COMPONENT_ADD_INCLUDEDIRS "")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-variable -Wno-unused-value")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Desp32")
+register_component()
+component_compile_options(-Wno-unused-variable -Wno-unused-value -Desp32)
