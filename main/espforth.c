@@ -16,6 +16,8 @@
 #  include "esp_vfs_dev.h"
 #  include "driver/uart.h"
 
+#define DEBUG_COREWORDS 0
+
 esp_err_t example_configure_stdin_stdout(void)
 {
     // Initialize VFS & UART so we can use std::cout/cin
@@ -63,19 +65,23 @@ void HEADER(int lex, char seq[]) {
   int len=lex&31;
   data[P++]=links;
   IP=P<<2;
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", links);
   for (i=links>>2;i<P;i++)
      {printf(" "); printf("%lx", data[i]);}
+#endif
   links=IP;
   cData[IP++]=lex;
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
   while (IP&3) {cData[IP++]=0;}
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%s", seq);
   printf(" ");
   printf("%lx", IP);
+#endif
 }
 int CODE(int len, ... ) {
   int addr=IP;
@@ -85,8 +91,10 @@ int CODE(int len, ... ) {
   for(; len;len--) {
     s= va_arg(argList, int);
     cData[IP++]=s;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", s);
+#endif
   }
   va_end(argList);
   return addr;
@@ -97,15 +105,19 @@ int COLON(int len, ... ) {
   data[P++]=6; // dolist
   va_list argList;
   va_start(argList, len);
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%x", addr);
   printf(" ");
   printf("6");
+#endif
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", j);
+#endif
   }
   IP=P<<2;
   va_end(argList);
@@ -116,13 +128,17 @@ int LABEL(int len, ... ) {
   P=IP>>2;
   va_list argList;
   va_start(argList, len);
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%x", addr);
+#endif
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", j);
+#endif
   }
   IP=P<<2;
   va_end(argList);
@@ -130,26 +146,32 @@ int LABEL(int len, ... ) {
   }
 void BEGIN(int len, ... ) {
   P=IP>>2;
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" BEGIN ");
+#endif
   pushR=P;
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", j);
+#endif
   }
   IP=P<<2;
   va_end(argList);
 }
 void AGAIN(int len, ... ) {
   P=IP>>2;
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" AGAIN ");
+#endif
   data[P++]=BRAN; 
   data[P++]=popR<<2; 
   va_list argList;
@@ -157,17 +179,21 @@ void AGAIN(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", j);
+#endif
   }
   IP=P<<2;
   va_end(argList);
   }
 void UNTIL(int len, ... ) {
   P=IP>>2;
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" UNTIL ");
+#endif
   data[P++]=QBRAN; 
   data[P++]=popR<<2; 
   va_list argList;
@@ -175,8 +201,10 @@ void UNTIL(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", j);
+#endif
   }
   IP=P<<2;
   va_end(argList);
@@ -184,9 +212,11 @@ void UNTIL(int len, ... ) {
 void WHILE(int len, ... ) {
   P=IP>>2;
   int k;
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" WHILE ");
+#endif
   data[P++]=QBRAN; 
   data[P++]=0; 
   k=popR;
@@ -197,17 +227,21 @@ void WHILE(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", j);
+#endif
   }
   IP=P<<2;
   va_end(argList);
   }
 void REPEAT(int len, ... ) {
   P=IP>>2;
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" REPEAT ");
+#endif
   data[P++]=BRAN; 
   data[P++]=popR<<2; 
   data[popR]=P<<2;
@@ -216,17 +250,21 @@ void REPEAT(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", j);
+#endif
   }
   IP=P<<2;
   va_end(argList);
   }
 void IF(int len, ... ) {
   P=IP>>2;
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" IF ");
+#endif
   data[P++]=QBRAN; 
   pushR=P;
   data[P++]=0; 
@@ -235,17 +273,21 @@ void IF(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", j);
+#endif
   }
   IP=P<<2;
   va_end(argList);
   }
 void ELSE(int len, ... ) {
   P=IP>>2;
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" ELSE ");
+#endif
   data[P++]=BRAN; 
   data[P++]=0; 
   data[popR]=P<<2; 
@@ -255,34 +297,42 @@ void ELSE(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", j);
+#endif
   }
   IP=P<<2;
   va_end(argList);
   }
 void THEN(int len, ... ) {
   P=IP>>2;
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" THEN ");
+#endif
   data[popR]=P<<2; 
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", j);
+#endif
   }
   IP=P<<2;
   va_end(argList);
   }
 void FOR(int len, ... ) {
   P=IP>>2;
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" FOR ");
+#endif
   data[P++]=TOR; 
   pushR=P;
   va_list argList;
@@ -290,17 +340,21 @@ void FOR(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", j);
+#endif
   }
   IP=P<<2;
   va_end(argList);
   }
 void NEXT(int len, ... ) {
   P=IP>>2;
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" NEXT ");
+#endif
   data[P++]=DONXT; 
   data[P++]=popR<<2; 
   va_list argList;
@@ -308,8 +362,10 @@ void NEXT(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", j);
+#endif
   }
   IP=P<<2;
   va_end(argList);
@@ -317,9 +373,11 @@ void NEXT(int len, ... ) {
 void AFT(int len, ... ) {
   P=IP>>2;
   int k;
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" AFT ");
+#endif
   data[P++]=BRAN; 
   data[P++]=0; 
   k=popR;
@@ -331,8 +389,10 @@ void AFT(int len, ... ) {
   for(; len;len--) {
     int j=va_arg(argList, int);
     data[P++]=j;
+#if DEBUG_COREWORDS
     printf(" ");
     printf("%x", j);
+#endif
   }
   IP=P<<2;
   va_end(argList);
@@ -347,10 +407,12 @@ void DOTQ(char seq[]) {
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
   while (IP&3) {cData[IP++]=0;}
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" ");
   printf("%s", seq);
+#endif
 }
 void STRQ(char seq[]) {
   P=IP>>2;
@@ -362,10 +424,12 @@ void STRQ(char seq[]) {
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
   while (IP&3) {cData[IP++]=0;}
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" ");
   printf("%s", seq);
+#endif
 }
 void ABORQ(char seq[]) {
   P=IP>>2;
@@ -377,10 +441,12 @@ void ABORQ(char seq[]) {
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
   while (IP&3) {cData[IP++]=0;}
+#if DEBUG_COREWORDS
   printf("\n");
   printf("%lx", IP);
   printf(" ");
   printf("%s", seq);
+#endif
 }
 
 void CheckSum() {
@@ -711,15 +777,26 @@ void adc(void) {
   top= (long) 0;
 }
 
+static void setpin(int p, int level) {
+#ifdef esp32
+   gpio_pad_select_gpio(p);
+   gpio_set_direction(p, GPIO_MODE_OUTPUT);
+   gpio_set_level(p, top);
+#endif
+}
+
 void pin(void)
 {  WP=top; pop;
    //ledcAttachPin(top,WP);
-#ifdef esp32
-   gpio_pad_select_gpio(WP);
-   gpio_set_direction(WP, GPIO_MODE_OUTPUT);
-   gpio_set_level(WP, top);
-#endif
+   setpin(WP, top);
    pop;
+}
+
+void ms(void) {
+  WP = top; pop;
+#ifdef esp32
+  vTaskDelay(WP / portTICK_PERIOD_MS);
+#endif
 }
 
 void duty(void)
@@ -734,7 +811,7 @@ void freq(void)
    pop;
 }
 
-void (*primitives[72])(void) = {
+void (*primitives[73])(void) = {
     /* case 0 */ nop,
     /* case 1 */ accep, 
     /* case 2 */ qrx,    
@@ -806,7 +883,8 @@ void (*primitives[72])(void) = {
     /* case 68 */ adc,
     /* case 69 */ pin,
     /* case 70 */ duty, 
-    /* case 71 */ freq };
+    /* case 71 */ freq,
+    /* case 72 */ ms };
 
 int as_nop=0;
 int as_accept=1;
@@ -880,6 +958,7 @@ int as_adc=68;
 int as_pin=69;
 int as_duty=70;
 int as_freq=71;
+int as_ms=72;
 
 void evaluate()
 {
@@ -910,6 +989,11 @@ void app_main(void) {
 #else
 int main(void) {
 #endif
+#ifdef esp32
+  example_configure_stdin_stdout();
+#endif
+  printf("booting...\n");
+  fflush(stdout);
   P = 0x180;
   WP = 0x184;
   IP = 0;
@@ -1122,6 +1206,8 @@ int main(void) {
   int DUTY=CODE(4,as_duty,as_next,0,0);
   HEADER(4,"FREQ");
   int FREQ=CODE(4,as_freq,as_next,0,0);
+  HEADER(2,"MS");
+  int MS=CODE(4,as_ms,as_next,0,0);
 
   HEADER(3,"KEY");
   int KEY=COLON(0);
@@ -1528,13 +1614,13 @@ int main(void) {
   IP=0x180;
   int USER=LABEL(16,6,EVAL,0,0,0,0,0,0,0,0x10,IMMED-12,ENDD,IMMED-12,INTER,EVAL,0);
 
-// dump dictionary
+#if DEBUG_COREWORDS
+  // dump dictionary
   IP=0;
   for (len=0;len<0x120;len++){CheckSum();}
-
-#ifdef esp32
-  example_configure_stdin_stdout();
 #endif
+
+  setpin(13, 0);
   run();
 }
 
