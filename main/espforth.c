@@ -970,17 +970,18 @@ void evaluate()
 }
 
 static void run() {
-  printf("\n");
   printf("AIBOT\n");
+  // TODO: Find better way to start in decimal.
+  strcpy(cData, "decimal");
+  len = strlen(cData);
   for (;;) {
-    len = duplexread(cData, 255);
-    //Serial.println("Enter Forth.");
     data[0x66] = 0;                   // >IN
     data[0x67] = len;                 // #TIB
     data[0x68] = 0;                   // 'TIB
     P = 0x180;                        // EVAL
     WP = 0x184;
     evaluate();
+    len = duplexread(cData, 255);
   }
 }
 
@@ -992,8 +993,10 @@ int main(void) {
 #ifdef esp32
   example_configure_stdin_stdout();
 #endif
+#if 0
   printf("booting...\n");
   fflush(stdout);
+#endif
   P = 0x180;
   WP = 0x184;
   IP = 0;
@@ -1606,11 +1609,13 @@ int main(void) {
   HEADER(9,"IMMEDIATE");
   int IMMED=COLON(6,DOLIT,0x80,LAST,AT,PSTOR,EXITT);
   int ENDD=IP;
+#if DEBUG_COREWORDS
   printf("\n");
   printf("IP=");
   printf("%lx", IP);
   printf(" R-stack= ");
   printf("%lx", popR<<2);
+#endif
   IP=0x180;
   int USER=LABEL(16,6,EVAL,0,0,0,0,0,0,0,0x10,IMMED-12,ENDD,IMMED-12,INTER,EVAL,0);
 

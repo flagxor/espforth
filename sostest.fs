@@ -1,5 +1,3 @@
-decimal
-
 : on 0 13 pin ;
 : off 1 13 pin ;
 : dot on 100 ms off 100 ms ;
