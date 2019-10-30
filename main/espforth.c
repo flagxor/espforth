@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <inttypes.h>
 #ifdef esp32
 #  include "freertos/FreeRTOS.h"
 #  include "freertos/task.h"
@@ -15,8 +16,6 @@
 #  include "esp_err.h"
 #  include "esp_vfs_dev.h"
 #  include "driver/uart.h"
-
-#define DEBUG_COREWORDS 0
 
 esp_err_t example_configure_stdin_stdout(void)
 {
@@ -35,55 +34,77 @@ esp_err_t example_configure_stdin_stdout(void)
 }
 #endif
 
+#define DEBUG_COREWORDS 1
+
+typedef intptr_t cell_t;
+typedef uintptr_t ucell_t;
+#if __SIZEOF_POINTER__ == 8
+typedef __int128_t dcell_t;
+typedef __uint128_t udcell_t;
+#elif __SIZEOF_POINTER__ == 4
+typedef int64_t dcell_t;
+typedef uint64_t udcell_t;
+#else
+# error "unsupported cell size"
+#endif
+
+#define CELL_BITS (sizeof(cell_t)*8)
+#define PRIxCELL PRIxPTR
+
 # define  FALSE 0
 # define  TRUE  -1
 # define  LOGICAL ? TRUE : FALSE
-# define  LOWER(x,y) ((unsigned long)(x)<(unsigned long)(y))
+# define  LOWER(x,y) ((ucell_t)(x)<(ucell_t)(y))
 # define  pop top = stack[(unsigned char)S--]
 # define  push stack[(unsigned char)++S] = top; top =
 # define  popR rack[(unsigned char)R--]
 # define  pushR rack[(unsigned char)++R]
 
-long rack[256] = {0};
-long stack[256] = {0};
+cell_t rack[256] = {0};
+cell_t stack[256] = {0};
 unsigned char R, S, bytecode ;
-long* Pointer ;
-long  P, IP, WP, top, links, len ;
+cell_t* Pointer ;
+cell_t  P, IP, WP, top, links, len ;
 uint8_t* cData ;
-long long int d, n, m ;
+dcell_t d, n, m ;
 
 int BRAN=0,QBRAN=0,DONXT=0,DOTQP=0,STRQP=0,TOR=0,ABORQP=0;
 
 //#include "rom_54.h" /* load dictionary */
-long data[16000] = {};
+cell_t data[16000] = {};
 int IMEDD=0x80;
 int COMPO=0x40;
 
 void HEADER(int lex, char seq[]) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
   int i;
   int len=lex&31;
   data[P++]=links;
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", links);
-  for (i=links>>2;i<P;i++)
-     {printf(" "); printf("%lx", data[i]);}
+  printf("%" PRIxCELL, links);
+  for (i=links/sizeof(cell_t);i<P;i++)
+     {printf(" "); printf("%" PRIxCELL, data[i]);}
 #endif
   links=IP;
   cData[IP++]=lex;
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
-  while (IP&3) {cData[IP++]=0;}
+  while (IP%sizeof(cell_t)) {cData[IP++]=0;}
 #if DEBUG_COREWORDS
   printf("\n");
   printf("%s", seq);
   printf(" ");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
 #endif
 }
+static int WithPadding(int sz) {
+  return (sz + sizeof(cell_t) - 1) / sizeof(cell_t) * sizeof(cell_t);
+}
 int CODE(int len, ... ) {
+  int total = WithPadding(len);
+  int padding = total - len;
   int addr=IP;
   int s;
   va_list argList;
@@ -96,12 +117,20 @@ int CODE(int len, ... ) {
     printf("%x", s);
 #endif
   }
+  for (; padding;padding--) {
+    cData[IP++]=0;
+  }
   va_end(argList);
   return addr;
   }
+static void Comma(cell_t n) {
+  P=IP/sizeof(cell_t);
+  data[P++] = n;
+  IP=P*sizeof(cell_t);
+}
 int COLON(int len, ... ) {
   int addr=IP;
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
   data[P++]=6; // dolist
   va_list argList;
   va_start(argList, len);
@@ -119,13 +148,13 @@ int COLON(int len, ... ) {
     printf("%x", j);
 #endif
   }
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   va_end(argList);
   return addr;
   }
 int LABEL(int len, ... ) {
   int addr=IP;
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
   va_list argList;
   va_start(argList, len);
 #if DEBUG_COREWORDS
@@ -140,15 +169,15 @@ int LABEL(int len, ... ) {
     printf("%x", j);
 #endif
   }
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   va_end(argList);
   return addr;
   }
 void BEGIN(int len, ... ) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" BEGIN ");
 #endif
   pushR=P;
@@ -162,18 +191,18 @@ void BEGIN(int len, ... ) {
     printf("%x", j);
 #endif
   }
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   va_end(argList);
 }
 void AGAIN(int len, ... ) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" AGAIN ");
 #endif
   data[P++]=BRAN; 
-  data[P++]=popR<<2; 
+  data[P++]=popR*sizeof(cell_t);
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
@@ -184,18 +213,18 @@ void AGAIN(int len, ... ) {
     printf("%x", j);
 #endif
   }
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   va_end(argList);
   }
 void UNTIL(int len, ... ) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" UNTIL ");
 #endif
   data[P++]=QBRAN; 
-  data[P++]=popR<<2; 
+  data[P++]=popR*sizeof(cell_t);
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
@@ -206,15 +235,15 @@ void UNTIL(int len, ... ) {
     printf("%x", j);
 #endif
   }
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   va_end(argList);
   }
 void WHILE(int len, ... ) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
   int k;
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" WHILE ");
 #endif
   data[P++]=QBRAN; 
@@ -232,19 +261,19 @@ void WHILE(int len, ... ) {
     printf("%x", j);
 #endif
   }
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   va_end(argList);
   }
 void REPEAT(int len, ... ) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" REPEAT ");
 #endif
   data[P++]=BRAN; 
-  data[P++]=popR<<2; 
-  data[popR]=P<<2;
+  data[P++]=popR*sizeof(cell_t);
+  data[popR]=P*sizeof(cell_t);
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
@@ -255,14 +284,14 @@ void REPEAT(int len, ... ) {
     printf("%x", j);
 #endif
   }
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   va_end(argList);
   }
 void IF(int len, ... ) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" IF ");
 #endif
   data[P++]=QBRAN; 
@@ -278,19 +307,19 @@ void IF(int len, ... ) {
     printf("%x", j);
 #endif
   }
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   va_end(argList);
   }
 void ELSE(int len, ... ) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" ELSE ");
 #endif
   data[P++]=BRAN; 
   data[P++]=0; 
-  data[popR]=P<<2; 
+  data[popR]=P*sizeof(cell_t);
   pushR=P-1;
   va_list argList;
   va_start(argList, len);
@@ -302,17 +331,17 @@ void ELSE(int len, ... ) {
     printf("%x", j);
 #endif
   }
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   va_end(argList);
   }
 void THEN(int len, ... ) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" THEN ");
 #endif
-  data[popR]=P<<2; 
+  data[popR]=P*sizeof(cell_t);
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
@@ -323,14 +352,14 @@ void THEN(int len, ... ) {
     printf("%x", j);
 #endif
   }
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   va_end(argList);
   }
 void FOR(int len, ... ) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" FOR ");
 #endif
   data[P++]=TOR; 
@@ -345,18 +374,18 @@ void FOR(int len, ... ) {
     printf("%x", j);
 #endif
   }
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   va_end(argList);
   }
 void NEXT(int len, ... ) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" NEXT ");
 #endif
   data[P++]=DONXT; 
-  data[P++]=popR<<2; 
+  data[P++]=popR*sizeof(cell_t);
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
@@ -367,15 +396,15 @@ void NEXT(int len, ... ) {
     printf("%x", j);
 #endif
   }
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   va_end(argList);
   }
 void AFT(int len, ... ) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
   int k;
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" AFT ");
 #endif
   data[P++]=BRAN; 
@@ -394,56 +423,56 @@ void AFT(int len, ... ) {
     printf("%x", j);
 #endif
   }
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   va_end(argList);
   }
 void DOTQ(char seq[]) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
   int i;
   int len=strlen(seq);
   data[P++]=DOTQP;
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   cData[IP++]=len;
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
-  while (IP&3) {cData[IP++]=0;}
+  while (IP%sizeof(cell_t)) {cData[IP++]=0;}
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" ");
   printf("%s", seq);
 #endif
 }
 void STRQ(char seq[]) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
   int i;
   int len=strlen(seq);
   data[P++]=STRQP;
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   cData[IP++]=len;
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
-  while (IP&3) {cData[IP++]=0;}
+  while (IP%sizeof(cell_t)) {cData[IP++]=0;}
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" ");
   printf("%s", seq);
 #endif
 }
 void ABORQ(char seq[]) {
-  P=IP>>2;
+  P=IP/sizeof(cell_t);
   int i;
   int len=strlen(seq);
   data[P++]=ABORQP;
-  IP=P<<2;
+  IP=P*sizeof(cell_t);
   cData[IP++]=len;
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
-  while (IP&3) {cData[IP++]=0;}
+  while (IP%sizeof(cell_t)) {cData[IP++]=0;}
 #if DEBUG_COREWORDS
   printf("\n");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" ");
   printf("%s", seq);
 #endif
@@ -451,14 +480,14 @@ void ABORQ(char seq[]) {
 
 void CheckSum() {
   int i;
-  char sum=0;
+  unsigned char sum=0;
   printf("\n");
-  printf("%lx ",IP);
+  printf("%04" PRIxCELL " ",IP);
   for (i=0;i<32;i++) {
     sum += cData[IP];
-    printf("%2x",cData[IP++]);
+    printf("%02x",cData[IP++]);
   }
-  printf(" %2x",sum);
+  printf(" %02x",sum);
 }
 /******************************************************************************/
 /* ledc                                                                       */
@@ -479,9 +508,9 @@ int brightness = 255;    // how bright the LED is
 /******************************************************************************/
 
 void next(void)
-{ P = data[IP>>2];
-  IP += 4; 
-  WP = P+4;  }
+{ P = data[IP/sizeof(cell_t)];
+  IP += sizeof(cell_t); 
+  WP = P+sizeof(cell_t);  }
 
 static int duplexread(unsigned char* dst, int sz) {
   int len = 0;
@@ -519,11 +548,11 @@ void txsto(void)
 } 
 
 void docon(void)
-{  push data[WP>>2]; }
+{  push data[WP/sizeof(cell_t)]; }
 
 void dolit(void)
-{   push data[IP>>2];
-  IP += 4;
+{   push data[IP/sizeof(cell_t)];
+  IP += sizeof(cell_t);
   next(); }
 
 void dolist(void)
@@ -532,43 +561,43 @@ void dolist(void)
   next(); }
 
 void exitt(void)
-{   IP = (long) rack[(unsigned char)R--];
+{   IP = (cell_t) rack[(unsigned char)R--];
   next(); }
 
 void execu(void)
 {  P = top;
-  WP = P + 4;
+  WP = P + sizeof(cell_t);
   pop; }
 
 void donext(void)
 {   if(rack[(unsigned char)R]) {
     rack[(unsigned char)R] -= 1 ;
-    IP = data[IP>>2]; 
-  } else { IP += 4;  (unsigned char)R-- ;  }
+    IP = data[IP/sizeof(cell_t)]; 
+  } else { IP += sizeof(cell_t);  R-- ;  }
   next(); }
 
 void qbran(void)
-{   if(top == 0) IP = data[IP>>2]; 
-  else IP += 4;  pop; 
+{   if(top == 0) IP = data[IP/sizeof(cell_t)]; 
+  else IP += sizeof(cell_t);  pop; 
   next(); }
 
 void bran(void)
-{   IP = data[IP>>2]; 
+{   IP = data[IP/sizeof(cell_t)]; 
   next(); }
 
 void store(void)
-{   data[top>>2] = stack[(unsigned char)S--];
+{   data[top/sizeof(cell_t)] = stack[(unsigned char)S--];
   pop;  }
 
 void at(void)
-{   top = data[top>>2];  }
+{   top = data[top/sizeof(cell_t)];  }
 
 void cstor(void)
 {   cData[top] = (unsigned char) stack[(unsigned char)S--];
   pop;  }
 
 void cat(void)
-{   top = (long) cData[top];  }
+{   top = (cell_t) cData[top];  }
 
 void rpat(void) {}
 void rpsto(void) {}
@@ -671,21 +700,31 @@ void uless(void)
 {   top = LOWER(stack[(unsigned char)S], top) LOGICAL; S--;  }
 
 void ummod(void)
-{  d = (long long int)((unsigned long)top);
-  m = (long long int)((unsigned long)stack[(unsigned char) S]);
-  n = (long long int)((unsigned long)stack[(unsigned char) (S - 1)]);
-  n += m << 32;
+{  d = (udcell_t)((ucell_t)top);
+  m = (udcell_t)((ucell_t)stack[(unsigned char) S]);
+  n = (udcell_t)((ucell_t)stack[(unsigned char) (S - 1)]);
+  n += m << CELL_BITS;
   pop;
-  top = (unsigned long)(n / d);
-  stack[(unsigned char) S] = (unsigned long)(n%d); }
+  if (d == 0) {
+    top = 0;
+    stack[S] = 0;
+    return;
+  }
+  top = (ucell_t)(n / d);
+  stack[(unsigned char) S] = (ucell_t)(n%d); }
 void msmod(void)
-{ d = (signed long long int)((signed long)top);
-  m = (signed long long int)((signed long)stack[(unsigned char) S]);
-  n = (signed long long int)((signed long)stack[(unsigned char) S - 1]);
-  n += m << 32;
+{ d = (dcell_t)((cell_t)top);
+  m = (dcell_t)((cell_t)stack[(unsigned char) S]);
+  n = (dcell_t)((cell_t)stack[(unsigned char) S - 1]);
+  n += m << CELL_BITS;
   pop;
-  top = (signed long)(n / d);
-  stack[(unsigned char) S] = (signed long)(n%d); }
+  if (d == 0) {
+    top = 0;
+    stack[S] = 0;
+    return;
+  }
+  top = (cell_t)(n / d);
+  stack[(unsigned char) S] = (cell_t)(n%d); }
 void slmod(void)
 { if (top != 0) {
     WP = stack[(unsigned char) S] / top;
@@ -695,51 +734,51 @@ void slmod(void)
 void mod(void)
 { top = (top) ? stack[(unsigned char) S--] % top : stack[(unsigned char) S--]; }
 void slash(void)
-{ top = (top) ? stack[(unsigned char) S--] / top : (stack[(unsigned char) S--], 0); }
+{ top = (top) ? stack[(unsigned char) S--] / top : (S--, 0); }
 void umsta(void)
-{ d = (unsigned long long int)top;
-  m = (unsigned long long int)stack[(unsigned char) S];
+{ d = (udcell_t)top;
+  m = (udcell_t)stack[(unsigned char) S];
   m *= d;
-  top = (unsigned long)(m >> 32);
-  stack[(unsigned char) S] = (unsigned long)m; }
+  top = (ucell_t)(m >> CELL_BITS);
+  stack[(unsigned char) S] = (ucell_t)m; }
 void star(void)
 { top *= stack[(unsigned char) S--]; }
 void mstar(void)
-{ d = (signed long long int)top;
-  m = (signed long long int)stack[(unsigned char) S];
+{ d = (dcell_t)top;
+  m = (dcell_t)stack[(unsigned char) S];
   m *= d;
-  top = (signed long)(m >> 32);
-  stack[(unsigned char) S] = (signed long)m; }
+  top = (cell_t)(m >> CELL_BITS);
+  stack[(unsigned char) S] = (cell_t)m; }
 void ssmod(void)
-{ d = (signed long long int)top;
-  m = (signed long long int)stack[(unsigned char) S];
-  n = (signed long long int)stack[(unsigned char) (S - 1)];
+{ d = (dcell_t)top;
+  m = (dcell_t)stack[(unsigned char) S];
+  n = (dcell_t)stack[(unsigned char) (S - 1)];
   n *= m;
   pop;
-  top = (signed long)(n / d);
-  stack[(unsigned char) S] = (signed long)(n%d); }
+  top = (cell_t)(n / d);
+  stack[(unsigned char) S] = (cell_t)(n%d); }
 void stasl(void)
-{ d = (signed long long int)top;
-  m = (signed long long int)stack[(unsigned char) S];
-  n = (signed long long int)stack[(unsigned char) (S - 1)];
+{ d = (dcell_t)top;
+  m = (dcell_t)stack[(unsigned char) S];
+  n = (dcell_t)stack[(unsigned char) (S - 1)];
   n *= m;
   pop; pop;
-  top = (signed long)(n / d); }
+  top = (cell_t)(n / d); }
 
 void pick(void)
 {   top = stack[(unsigned char)(S-top)];  }
 
 void pstor(void)
-{   data[top>>2] += stack[(unsigned char)S--], pop;  }
+{   data[top/sizeof(cell_t)] += stack[(unsigned char)S--], pop;  }
 
 void dstor(void)
-{   data[(top>>2)+1] = stack[(unsigned char)S--];
-  data[top>>2] = stack[(unsigned char)S--];
+{   data[(top/sizeof(cell_t))+1] = stack[(unsigned char)S--];
+  data[top/sizeof(cell_t)] = stack[(unsigned char)S--];
   pop;  }
 
 void dat(void)
-{   push data[top>>2];
-  top = data[(top>>2)+1];  }
+{   push data[top/sizeof(cell_t)];
+  top = data[(top/sizeof(cell_t))+1];  }
 
 void count(void)
 {   stack[(unsigned char)++S] = top + 1;
@@ -750,10 +789,10 @@ void dovar(void)
 
 void maxx(void)
 {   if (top < stack[(unsigned char)S]) pop;
-  else (unsigned char)S--; }
+  else S--; }
 
 void minn(void)
-{   if (top < stack[(unsigned char)S]) (unsigned char)S--;
+{   if (top < stack[(unsigned char)S]) S--;
   else pop; }
 
 void audio(void)
@@ -766,15 +805,15 @@ void sendPacket(void)
 {}
 
 void poke(void)
-{   Pointer = (long*)top; *Pointer = stack[(unsigned char)S--];
+{   Pointer = (cell_t*)top; *Pointer = stack[(unsigned char)S--];
     pop;  }
 
 void peeek(void)
-{   Pointer = (long*)top; top = *Pointer;  }
+{   Pointer = (cell_t*)top; top = *Pointer;  }
 
 void adc(void) {
-  //top= (long) analogRead(top);
-  top= (long) 0;
+  //top= (cell_t) analogRead(top);
+  top= (cell_t) 0;
 }
 
 static void setpin(int p, int level) {
@@ -960,10 +999,17 @@ int as_duty=70;
 int as_freq=71;
 int as_ms=72;
 
+static int CONSTANT(cell_t n) {
+  int ret = CODE(2, as_docon, as_next);
+  Comma(n);
+  return ret;
+}
+
 void evaluate()
 {
   for(;;) {
     bytecode=(unsigned char)cData[P++];
+    //printf("%d ", bytecode);
     if (bytecode) primitives[bytecode]();
     else break;
   }
@@ -972,14 +1018,14 @@ void evaluate()
 static void run() {
   printf("AIBOT\n");
   // TODO: Find better way to start in decimal.
-  strcpy(cData, "decimal");
-  len = strlen(cData);
+  strcpy((char*) cData, "decimal");
+  len = strlen((char*) cData);
   for (;;) {
     data[0x66] = 0;                   // >IN
     data[0x67] = len;                 // #TIB
     data[0x68] = 0;                   // 'TIB
-    P = 0x180;                        // EVAL
-    WP = 0x184;
+    P = 0x64 * sizeof(cell_t);        // EVAL
+    WP = P + sizeof(cell_t);
     evaluate();
     len = duplexread(cData, 255);
   }
@@ -997,8 +1043,8 @@ int main(void) {
   printf("booting...\n");
   fflush(stdout);
 #endif
-  P = 0x180;
-  WP = 0x184;
+  P = 0x64 * sizeof(cell_t);
+  WP = P + sizeof(cell_t);
   IP = 0;
   S = 0;
   R = 0;
@@ -1022,38 +1068,39 @@ int main(void) {
   digitalWrite(19, LOW);   // motor2 bacward
 #endif
 
-  IP=512;
+  IP=128 * sizeof(cell_t);
+  cell_t datap = 0x64 * sizeof(cell_t) - sizeof(cell_t);
   R=0;
   HEADER(3,"HLD");
-  int HLD=CODE(8,as_docon,as_next,0,0,0X90,1,0,0);
+  int HLD=CONSTANT(datap += sizeof(cell_t));
   HEADER(4,"SPAN");
-  int SPAN=CODE(8,as_docon,as_next,0,0,0X94,1,0,0);
+  int SPAN=CONSTANT(datap += sizeof(cell_t));
   HEADER(3,">IN");
-  int INN=CODE(8,as_docon,as_next,0,0,0X98,1,0,0);
+  int INN=CONSTANT(datap += sizeof(cell_t));
   HEADER(4,"#TIB");
-  int NTIB=CODE(8,as_docon,as_next,0,0,0X9C,1,0,0);
+  int NTIB=CONSTANT(datap += sizeof(cell_t));
   HEADER(4,"'TIB");
-  int TTIB=CODE(8,as_docon,as_next,0,0,0XA0,1,0,0);
+  int TTIB=CONSTANT(datap += sizeof(cell_t));
   HEADER(4,"BASE");
-  int BASE=CODE(8,as_docon,as_next,0,0,0XA4,1,0,0);
+  int BASE=CONSTANT(datap += sizeof(cell_t));
   HEADER(7,"CONTEXT");
-  int CNTXT=CODE(8,as_docon,as_next,0,0,0XA8,1,0,0);
+  int CNTXT=CONSTANT(datap += sizeof(cell_t));
   HEADER(2,"CP");
-  int CP=CODE(8,as_docon,as_next,0,0,0XAC,1,0,0);
+  int CP=CONSTANT(datap += sizeof(cell_t));
   HEADER(4,"LAST");
-  int LAST=CODE(8,as_docon,as_next,0,0,0XB0,1,0,0);
+  int LAST=CONSTANT(datap += sizeof(cell_t));
   HEADER(5,"'EVAL");
-  int TEVAL=CODE(8,as_docon,as_next,0,0,0XB4,1,0,0);
+  int TEVAL=CONSTANT(datap += sizeof(cell_t));
   HEADER(6,"'ABORT");
-  int TABRT=CODE(8,as_docon,as_next,0,0,0XB8,1,0,0);
+  int TABRT=CONSTANT(datap += sizeof(cell_t));
   HEADER(3,"tmp");
-  int TEMP=CODE(8,as_docon,as_next,0,0,0XBC,1,0,0);
+  int TEMP=CONSTANT(datap += sizeof(cell_t));
   HEADER(1,"Z");
-  int Z=CODE(8,as_docon,as_next,0,0,0,0,0,0);
+  int Z=CONSTANT(0);
   HEADER(4,"ppqn");
-  int PPQN=CODE(8,as_docon,as_next,0,0,0XC0,1,0,0);
+  int PPQN=CONSTANT(datap += sizeof(cell_t));
   HEADER(7,"channel");
-  int CHANN=CODE(8,as_docon,as_next,0,0,0XC4,1,0,0);
+  int CHANN=CONSTANT(datap += sizeof(cell_t));
 
   HEADER(3,"NOP");
   int NOP=CODE(4,as_nop,as_next,0,0);
@@ -1170,29 +1217,29 @@ int main(void) {
   HEADER(3,"MIN");
   int MIN=CODE(4,as_min,as_next,0,0);
   HEADER(2,"BL");
-  int BLANK=CODE(8,as_docon,as_next,0,0,32,0,0,0);
+  int BLANK=CONSTANT(32);
   HEADER(4,"CELL");
-  int CELL=CODE(8,as_docon,as_next,0,0, 4,0,0,0);
+  int CELL=CONSTANT(sizeof(cell_t));
   HEADER(5,"CELL+");
-  int CELLP=CODE(8,as_docon,as_plus,as_next,0, 4,0,0,0);
+  int CELLP=CODE(3,as_docon,as_plus,as_next); Comma(sizeof(cell_t));
   HEADER(5,"CELL-");
-  int CELLM=CODE(8,as_docon,as_subb,as_next,0,4,0,0,0);
+  int CELLM=CODE(3,as_docon,as_subb,as_next); Comma(sizeof(cell_t));
   HEADER(5,"CELLS");
-  int CELLS=CODE(8,as_docon,as_star,as_next,0,4,0,0,0);
+  int CELLS=CODE(3,as_docon,as_star,as_next); Comma(sizeof(cell_t));
   HEADER(5,"CELL/");
-  int CELLD=CODE(8,as_docon,as_slash,as_next,0,4,0,0,0);
+  int CELLD=CODE(3,as_docon,as_slash,as_next); Comma(sizeof(cell_t));
   HEADER(2,"1+");
-  int ONEP=CODE(8,as_docon,as_plus,as_next,0,1,0,0,0);
+  int ONEP=CODE(3,as_docon,as_plus,as_next); Comma(1);
   HEADER(2,"1-");
-  int ONEM=CODE(8,as_docon,as_subb,as_next,0,1,0,0,0);
+  int ONEM=CODE(3,as_docon,as_subb,as_next); Comma(1);
   HEADER(2,"2+");
-  int TWOP=CODE(8,as_docon,as_plus,as_next,0,2,0,0,0);
+  int TWOP=CODE(3,as_docon,as_plus,as_next); Comma(2);
   HEADER(2,"2-");
-  int TWOM=CODE(8,as_docon,as_subb,as_next,0,2,0,0,0);
+  int TWOM=CODE(3,as_docon,as_subb,as_next); Comma(2);
   HEADER(2,"2*");
-  int TWOST=CODE(8,as_docon,as_star,as_next,0,2,0,0,0);
+  int TWOST=CODE(3,as_docon,as_star,as_next); Comma(2);
   HEADER(2,"2/");
-  int TWOS=CODE(8,as_docon,as_slash,as_next,0,2,0,0,0);
+  int TWOS=CODE(3,as_docon,as_slash,as_next); Comma(2);
   HEADER(10,"sendPacket");
   int SENDP=CODE(4,as_sendPacket,as_next,0,0);
   HEADER(4,"POKE");
@@ -1223,7 +1270,7 @@ int main(void) {
   IF(3,DROP,DOLIT,0X5F);
   THEN(1,EXITT);
   HEADER(7,"ALIGNED");
-  int ALIGN=COLON(7,DOLIT,3,PLUS,DOLIT,0XFFFFFFFC,ANDD,EXITT);
+  int ALIGN=COLON(7,DOLIT,3,PLUS,DOLIT,-sizeof(cell_t),ANDD,EXITT);
   HEADER(4,"HERE");
   int HERE=COLON(3,CP,AT,EXITT);
   HEADER(3,"PAD");
@@ -1356,7 +1403,7 @@ int main(void) {
   THEN(6,OVER,SUBBB,RFROM,RFROM,SUBBB,EXITT);
   THEN(4,OVER,RFROM,SUBBB,EXITT);
   HEADER(5,"PACK$");
-  int PACKS=COLON(18,DUPP,TOR,DDUP,PLUS,DOLIT,0xFFFFFFFC,ANDD,DOLIT,0,SWAP,STORE,DDUP,CSTOR,ONEP,SWAP,CMOVEE,RFROM,EXITT);
+  int PACKS=COLON(18,DUPP,TOR,DDUP,PLUS,DOLIT,-sizeof(cell_t),ANDD,DOLIT,0,SWAP,STORE,DDUP,CSTOR,ONEP,SWAP,CMOVEE,RFROM,EXITT);
   HEADER(5,"PARSE");
   int PARSE=COLON(15,TOR,TIB,INN,AT,PLUS,NTIB,AT,INN,AT,SUBBB,RFROM,PARS,INN,PSTOR,EXITT);
   HEADER(5,"TOKEN");
@@ -1376,8 +1423,8 @@ int main(void) {
   HEADER(4,"find");
   int FIND=COLON(10,SWAP,DUPP,AT,TEMP,STORE,DUPP,AT,TOR,CELLP,SWAP);
   BEGIN(2,AT,DUPP);
-  IF(9,DUPP,AT,DOLIT,0xFFFFFF3F,ANDD,UPPER,RAT,UPPER,XORR);
-  IF(3,CELLP,DOLIT,0XFFFFFFFF);
+  IF(9,DUPP,AT,DOLIT,~0xC0,ANDD,UPPER,RAT,UPPER,XORR);
+  IF(3,CELLP,DOLIT,-1);
   ELSE(4,CELLP,TEMP,AT,SAMEQ);
   THEN(0);
   ELSE(6,RFROM,DROP,SWAP,CELLM,SWAP,EXITT);
@@ -1593,36 +1640,40 @@ int main(void) {
   HEADER(4,"CODE");
   int CODE=COLON(5,TOKEN,SNAME,OVERT,ALIGN,EXITT);
   HEADER(6,"CREATE");
-  int CREAT=COLON(5,CODE,DOLIT,0x203D,COMMA,EXITT);
+  int CREAT=COLON(5,CODE,DOLIT,as_dolit + (as_donext << 8),COMMA,EXITT);
   HEADER(8,"VARIABLE");
   int VARIA=COLON(5,CREAT,DOLIT,0,COMMA,EXITT);
   HEADER(8,"CONSTANT");
-  int CONST=COLON(6,CODE,DOLIT,0x2004,COMMA,COMMA,EXITT);
+  int CONST=COLON(6,CODE,DOLIT,as_docon + (as_donext << 8),COMMA,COMMA,EXITT);
   HEADER(IMEDD+2,".(");
-  int DOTPR=COLON(5,DOLIT,0X29,PARSE,TYPES,EXITT);
+  int DOTPR=COLON(5,DOLIT,')',PARSE,TYPES,EXITT);
   HEADER(IMEDD+1,"\\");
-  int BKSLA=COLON(5,DOLIT,0xA,WORDD,DROP,EXITT);
+  int BKSLA=COLON(5,DOLIT,'\n',WORDD,DROP,EXITT);
   HEADER(IMEDD+1,"(");
-  int PAREN=COLON(5,DOLIT,0X29,PARSE,DDROP,EXITT);
+  int PAREN=COLON(5,DOLIT,')',PARSE,DDROP,EXITT);
   HEADER(12,"COMPILE-ONLY");
-  int ONLY=COLON(6,DOLIT,0x40,LAST,AT,PSTOR,EXITT);
+  int ONLY=COLON(6,DOLIT,COMPO,LAST,AT,PSTOR,EXITT);
   HEADER(9,"IMMEDIATE");
-  int IMMED=COLON(6,DOLIT,0x80,LAST,AT,PSTOR,EXITT);
+  int IMMED=COLON(6,DOLIT,IMEDD,LAST,AT,PSTOR,EXITT);
   int ENDD=IP;
 #if DEBUG_COREWORDS
   printf("\n");
   printf("IP=");
-  printf("%lx", IP);
+  printf("%" PRIxCELL, IP);
   printf(" R-stack= ");
-  printf("%lx", popR<<2);
+  printf("%" PRIxCELL, popR*sizeof(cell_t));
 #endif
-  IP=0x180;
-  int USER=LABEL(16,6,EVAL,0,0,0,0,0,0,0,0x10,IMMED-12,ENDD,IMMED-12,INTER,EVAL,0);
+  IP = 0x64 * sizeof(cell_t);
+  int USER=LABEL(16,6,EVAL,0,0,0,0,0,0,0,0x10,
+                 IMMED-WithPadding(10),ENDD,IMMED-WithPadding(10),INTER,EVAL,0);
 
 #if DEBUG_COREWORDS
   // dump dictionary
   IP=0;
-  for (len=0;len<0x120;len++){CheckSum();}
+  for (len=0;len<0x90 * sizeof(cell_t);len++) {
+    CheckSum();
+  }
+  printf("\n");
 #endif
 
   setpin(13, 0);
