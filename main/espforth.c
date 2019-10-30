@@ -1,5 +1,6 @@
 // esp32 Forth, based on Version 6.3
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -124,6 +125,7 @@ int CODE(int len, ... ) {
   return addr;
   }
 static void Comma(cell_t n) {
+  assert(IP % sizeof(cell_t) == 0);
   P=IP/sizeof(cell_t);
   data[P++] = n;
   IP=P*sizeof(cell_t);
@@ -782,7 +784,7 @@ void dat(void)
 
 void count(void)
 {   stack[(unsigned char)++S] = top + 1;
-  top = cData[top];  }
+  top = cData[top]; }
 
 void dovar(void)
 {   push WP; }
@@ -1270,7 +1272,7 @@ int main(void) {
   IF(3,DROP,DOLIT,0X5F);
   THEN(1,EXITT);
   HEADER(7,"ALIGNED");
-  int ALIGN=COLON(7,DOLIT,3,PLUS,DOLIT,-sizeof(cell_t),ANDD,EXITT);
+  int ALIGN=COLON(7,DOLIT,3,PLUS,DOLIT,~sizeof(cell_t),ANDD,EXITT);
   HEADER(4,"HERE");
   int HERE=COLON(3,CP,AT,EXITT);
   HEADER(3,"PAD");
@@ -1337,7 +1339,7 @@ int main(void) {
   IF(8,DOLIT,7,SUBBB,DUPP,DOLIT,10,LESS,ORR);
   THEN(4,DUPP,RFROM,ULESS,EXITT);
   HEADER(7,"NUMBER?");
-  int NUMBQ=COLON(12,BASE,AT,TOR,DOLIT,0,OVER,COUNT,OVER,CAT,DOLIT,0X24,EQUAL);
+  int NUMBQ=COLON(12,BASE,AT,TOR,DOLIT,0,OVER,COUNT,OVER,CAT,DOLIT,'$',EQUAL);
   IF(5,HEXX,SWAP,ONEP,SWAP,ONEM);
   THEN(13,OVER,CAT,DOLIT,0X2D,EQUAL,TOR,SWAP,RAT,SUBBB,SWAP,RAT,PLUS,QDUP);
   IF(1,ONEM);
@@ -1403,7 +1405,7 @@ int main(void) {
   THEN(6,OVER,SUBBB,RFROM,RFROM,SUBBB,EXITT);
   THEN(4,OVER,RFROM,SUBBB,EXITT);
   HEADER(5,"PACK$");
-  int PACKS=COLON(18,DUPP,TOR,DDUP,PLUS,DOLIT,-sizeof(cell_t),ANDD,DOLIT,0,SWAP,STORE,DDUP,CSTOR,ONEP,SWAP,CMOVEE,RFROM,EXITT);
+  int PACKS=COLON(18,DUPP,TOR,DDUP,PLUS,DOLIT,~sizeof(cell_t),ANDD,DOLIT,0,SWAP,STORE,DDUP,CSTOR,ONEP,SWAP,CMOVEE,RFROM,EXITT);
   HEADER(5,"PARSE");
   int PARSE=COLON(15,TOR,TIB,INN,AT,PLUS,NTIB,AT,INN,AT,SUBBB,RFROM,PARS,INN,PSTOR,EXITT);
   HEADER(5,"TOKEN");
@@ -1444,7 +1446,7 @@ int main(void) {
   IF(4,DOSTR,COUNT,TYPES,ABORT);
   THEN(3,DOSTR,DROP,EXITT);
   HEADER(5,"ERROR");
-  int ERRORR=COLON(8,SPACE,COUNT,TYPES,DOLIT,0x3F,EMIT,CR,ABORT);
+  int ERRORR=COLON(8,SPACE,COUNT,TYPES,DOLIT,'?',EMIT,CR,ABORT);
   HEADER(10,"$INTERPRET");
   int INTER=COLON(2,NAMEQ,QDUP);
   IF(4,CAT,DOLIT,COMPO,ANDD);
@@ -1670,7 +1672,7 @@ int main(void) {
 #if DEBUG_COREWORDS
   // dump dictionary
   IP=0;
-  for (len=0;len<0x90 * sizeof(cell_t);len++) {
+  for (len=0;len<0x48 * sizeof(cell_t);len++) {
     CheckSum();
   }
   printf("\n");
