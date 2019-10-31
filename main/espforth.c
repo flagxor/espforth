@@ -42,9 +42,11 @@ typedef uintptr_t ucell_t;
 #if __SIZEOF_POINTER__ == 8
 typedef __int128_t dcell_t;
 typedef __uint128_t udcell_t;
+# define UPPER_MASK 0x5f5f5f5f5f5f5f5f
 #elif __SIZEOF_POINTER__ == 4
 typedef int64_t dcell_t;
 typedef uint64_t udcell_t;
+# define UPPER_MASK 0x5f5f5f5f
 #else
 # error "unsupported cell size"
 #endif
@@ -147,7 +149,7 @@ int COLON(int len, ... ) {
     data[P++]=j;
 #if DEBUG_COREWORDS
     printf(" ");
-    printf("%x", j);
+    printf("%" PRIxCELL, data[P-1]);
 #endif
   }
   IP=P*sizeof(cell_t);
@@ -203,7 +205,7 @@ void AGAIN(int len, ... ) {
   printf("%" PRIxCELL, IP);
   printf(" AGAIN ");
 #endif
-  data[P++]=BRAN; 
+  data[P++]=BRAN;
   data[P++]=popR*sizeof(cell_t);
   va_list argList;
   va_start(argList, len);
@@ -225,7 +227,7 @@ void UNTIL(int len, ... ) {
   printf("%" PRIxCELL, IP);
   printf(" UNTIL ");
 #endif
-  data[P++]=QBRAN; 
+  data[P++]=QBRAN;
   data[P++]=popR*sizeof(cell_t);
   va_list argList;
   va_start(argList, len);
@@ -248,8 +250,8 @@ void WHILE(int len, ... ) {
   printf("%" PRIxCELL, IP);
   printf(" WHILE ");
 #endif
-  data[P++]=QBRAN; 
-  data[P++]=0; 
+  data[P++]=QBRAN;
+  data[P++]=0;
   k=popR;
   pushR=(P-1);
   pushR=k;
@@ -273,7 +275,7 @@ void REPEAT(int len, ... ) {
   printf("%" PRIxCELL, IP);
   printf(" REPEAT ");
 #endif
-  data[P++]=BRAN; 
+  data[P++]=BRAN;
   data[P++]=popR*sizeof(cell_t);
   data[popR]=P*sizeof(cell_t);
   va_list argList;
@@ -296,9 +298,9 @@ void IF(int len, ... ) {
   printf("%" PRIxCELL, IP);
   printf(" IF ");
 #endif
-  data[P++]=QBRAN; 
+  data[P++]=QBRAN;
   pushR=P;
-  data[P++]=0; 
+  data[P++]=0;
   va_list argList;
   va_start(argList, len);
   for(; len;len--) {
@@ -319,8 +321,8 @@ void ELSE(int len, ... ) {
   printf("%" PRIxCELL, IP);
   printf(" ELSE ");
 #endif
-  data[P++]=BRAN; 
-  data[P++]=0; 
+  data[P++]=BRAN;
+  data[P++]=0;
   data[popR]=P*sizeof(cell_t);
   pushR=P-1;
   va_list argList;
@@ -364,7 +366,7 @@ void FOR(int len, ... ) {
   printf("%" PRIxCELL, IP);
   printf(" FOR ");
 #endif
-  data[P++]=TOR; 
+  data[P++]=TOR;
   pushR=P;
   va_list argList;
   va_start(argList, len);
@@ -386,7 +388,7 @@ void NEXT(int len, ... ) {
   printf("%" PRIxCELL, IP);
   printf(" NEXT ");
 #endif
-  data[P++]=DONXT; 
+  data[P++]=DONXT;
   data[P++]=popR*sizeof(cell_t);
   va_list argList;
   va_start(argList, len);
@@ -409,8 +411,8 @@ void AFT(int len, ... ) {
   printf("%" PRIxCELL, IP);
   printf(" AFT ");
 #endif
-  data[P++]=BRAN; 
-  data[P++]=0; 
+  data[P++]=BRAN;
+  data[P++]=0;
   k=popR;
   (void)k;
   pushR=P;
@@ -511,7 +513,7 @@ int brightness = 255;    // how bright the LED is
 
 void next(void)
 { P = data[IP/sizeof(cell_t)];
-  IP += sizeof(cell_t); 
+  IP += sizeof(cell_t);
   WP = P+sizeof(cell_t);  }
 
 static int duplexread(unsigned char* dst, int sz) {
@@ -546,8 +548,8 @@ void qrx(void)
 void txsto(void)
 {  char c=top;
    fputc(c, stdout);
-   pop; 
-} 
+   pop;
+}
 
 void docon(void)
 {  push data[WP/sizeof(cell_t)]; }
@@ -559,7 +561,7 @@ void dolit(void)
 
 void dolist(void)
 {   rack[(unsigned char)++R] = IP;
-  IP = WP; 
+  IP = WP;
   next(); }
 
 void exitt(void)
@@ -574,17 +576,17 @@ void execu(void)
 void donext(void)
 {   if(rack[(unsigned char)R]) {
     rack[(unsigned char)R] -= 1 ;
-    IP = data[IP/sizeof(cell_t)]; 
+    IP = data[IP/sizeof(cell_t)];
   } else { IP += sizeof(cell_t);  R-- ;  }
   next(); }
 
 void qbran(void)
-{   if(top == 0) IP = data[IP/sizeof(cell_t)]; 
-  else IP += sizeof(cell_t);  pop; 
+{   if(top == 0) IP = data[IP/sizeof(cell_t)];
+  else IP += sizeof(cell_t);  pop;
   next(); }
 
 void bran(void)
-{   IP = data[IP/sizeof(cell_t)]; 
+{   IP = data[IP/sizeof(cell_t)];
   next(); }
 
 void store(void)
@@ -644,10 +646,10 @@ void xorr(void)
 
 void uplus(void)
 {   stack[(unsigned char)S] += top;
-  top = LOWER(stack[(unsigned char)S], top);  } 
+  top = LOWER(stack[(unsigned char)S], top);  }
 
 void nop(void)
-{   next(); } 
+{   next(); }
 
 void qdup(void)
 {   if(top) stack[(unsigned char)++S] = top ;  }
@@ -676,7 +678,7 @@ void negat(void)
 void dnega(void)
 {   inver();
   tor();
-  inver(); 
+  inver();
   push 1;
   uplus();
   rfrom();
@@ -784,6 +786,7 @@ void dat(void)
 
 void count(void)
 {   stack[(unsigned char)++S] = top + 1;
+fprintf(stderr, ":: "); fwrite(&cData[top+1], 1, cData[top], stderr); fprintf(stderr, "\n");
   top = cData[top]; }
 
 void dovar(void)
@@ -854,10 +857,10 @@ void freq(void)
 
 void (*primitives[73])(void) = {
     /* case 0 */ nop,
-    /* case 1 */ accep, 
-    /* case 2 */ qrx,    
-    /* case 3 */ txsto,  
-    /* case 4 */ docon,   
+    /* case 1 */ accep,
+    /* case 2 */ qrx,
+    /* case 3 */ txsto,
+    /* case 4 */ docon,
     /* case 5 */ dolit,
     /* case 6 */ dolist,
     /* case 7 */ exitt,
@@ -874,7 +877,7 @@ void (*primitives[73])(void) = {
     /* case 18 */ rfrom,
     /* case 19 */ rat,
     /* case 20 */ tor,
-    /* case 21 */ nop, 
+    /* case 21 */ nop,
     /* case 22 */ nop,
     /* case 23 */ drop,
     /* case 24 */ dup_,
@@ -885,45 +888,45 @@ void (*primitives[73])(void) = {
     /* case 29 */ orr,
     /* case 30 */ xorr,
     /* case 31 */ uplus,
-    /* case 32 */ next, 
-    /* case 33 */ qdup, 
-    /* case 34 */ rot, 
-    /* case 35 */ ddrop, 
-    /* case 36 */ ddup, 
+    /* case 32 */ next,
+    /* case 33 */ qdup,
+    /* case 34 */ rot,
+    /* case 35 */ ddrop,
+    /* case 36 */ ddup,
     /* case 37 */ plus,
-    /* case 38 */ inver, 
-    /* case 39 */ negat, 
-    /* case 40 */ dnega, 
-    /* case 41 */ subb, 
+    /* case 38 */ inver,
+    /* case 39 */ negat,
+    /* case 40 */ dnega,
+    /* case 41 */ subb,
     /* case 42 */ abss,
-    /* case 43 */ equal, 
-    /* case 44 */ uless, 
-    /* case 45 */ less,   
+    /* case 43 */ equal,
+    /* case 44 */ uless,
+    /* case 45 */ less,
     /* case 46 */ ummod,
     /* case 47 */ msmod,
-    /* case 48 */ slmod, 
-    /* case 49 */ mod,  
-    /* case 50 */ slash, 
-    /* case 51 */ umsta,   
-    /* case 52 */ star, 
-    /* case 53 */ mstar, 
-    /* case 54 */ ssmod, 
-    /* case 55 */ stasl, 
-    /* case 56 */ pick, 
-    /* case 57 */ pstor, 
-    /* case 58 */ dstor, 
-    /* case 59 */ dat, 
-    /* case 60 */ count, 
-    /* case 61 */ dovar, 
-    /* case 62 */ maxx, 
+    /* case 48 */ slmod,
+    /* case 49 */ mod,
+    /* case 50 */ slash,
+    /* case 51 */ umsta,
+    /* case 52 */ star,
+    /* case 53 */ mstar,
+    /* case 54 */ ssmod,
+    /* case 55 */ stasl,
+    /* case 56 */ pick,
+    /* case 57 */ pstor,
+    /* case 58 */ dstor,
+    /* case 59 */ dat,
+    /* case 60 */ count,
+    /* case 61 */ dovar,
+    /* case 62 */ maxx,
     /* case 63 */ minn,
     /* case 64 */ audio,
     /* case 65 */ sendPacket,
     /* case 66 */ poke,
-    /* case 67 */ peeek, 
+    /* case 67 */ peeek,
     /* case 68 */ adc,
     /* case 69 */ pin,
-    /* case 70 */ duty, 
+    /* case 70 */ duty,
     /* case 71 */ freq,
     /* case 72 */ ms };
 
@@ -1059,13 +1062,13 @@ int main(void) {
   ledcAttachPin(5, 0);
   ledcAnalogWrite(0, 250, brightness);
   pinMode(2,OUTPUT);
-  digitalWrite(2, HIGH);   // turn the LED2 on 
+  digitalWrite(2, HIGH);   // turn the LED2 on
   pinMode(16,OUTPUT);
   digitalWrite(16, LOW);   // motor1 forward
   pinMode(17,OUTPUT);
-  digitalWrite(17, LOW);   // motor1 backward 
+  digitalWrite(17, LOW);   // motor1 backward
   pinMode(18,OUTPUT);
-  digitalWrite(18, LOW);   // motor2 forward 
+  digitalWrite(18, LOW);   // motor2 forward
   pinMode(19,OUTPUT);
   digitalWrite(19, LOW);   // motor2 bacward
 #endif
@@ -1109,11 +1112,11 @@ int main(void) {
   HEADER(6,"ACCEPT");
   int ACCEP=CODE(4,as_accept,as_next,0,0);
   HEADER(4,"?KEY");
-  int QKEY=CODE(4,as_qrx,as_next,0,0);  
+  int QKEY=CODE(4,as_qrx,as_next,0,0);
   HEADER(4,"EMIT");
-  int EMIT=CODE(4,as_txsto,as_next,0,0);  
+  int EMIT=CODE(4,as_txsto,as_next,0,0);
   HEADER(5,"DOLIT");
-  int DOLIT=CODE(4,as_dolit,as_next,0,0); 
+  int DOLIT=CODE(4,as_dolit,as_next,0,0);
   HEADER(6,"DOLIST");
   int DOLST=CODE(4,as_dolist,as_next,0,0);
   HEADER(4,"EXIT");
@@ -1159,29 +1162,29 @@ int main(void) {
   HEADER(3,"UM+");
   int UPLUS=CODE(4,as_uplus,as_next,0,0);
   HEADER(4,"?DUP");
-  int QDUP=CODE(4,as_qdup,as_next,0,0); 
+  int QDUP=CODE(4,as_qdup,as_next,0,0);
   HEADER(3,"ROT");
-  int ROT=CODE(4,as_rot,as_next,0,0); 
+  int ROT=CODE(4,as_rot,as_next,0,0);
   HEADER(5,"2DROP");
-  int DDROP=CODE(4,as_ddrop,as_next,0,0); 
+  int DDROP=CODE(4,as_ddrop,as_next,0,0);
   HEADER(4,"2DUP");
-  int DDUP=CODE(4,as_ddup,as_next,0,0); 
+  int DDUP=CODE(4,as_ddup,as_next,0,0);
   HEADER(1,"+");
   int PLUS=CODE(4,as_plus,as_next,0,0);
   HEADER(3,"NOT");
   int INVER=CODE(4,as_inver,as_next,0,0);
   HEADER(6,"NEGATE");
-  int NEGAT=CODE(4,as_negat,as_next,0,0); 
+  int NEGAT=CODE(4,as_negat,as_next,0,0);
   HEADER(7,"DNEGATE");
-  int DNEGA=CODE(4,as_dnega,as_next,0,0); 
+  int DNEGA=CODE(4,as_dnega,as_next,0,0);
   HEADER(1,"-");
-  int SUBBB=CODE(4,as_subb,as_next,0,0); 
+  int SUBBB=CODE(4,as_subb,as_next,0,0);
   HEADER(3,"ABS");
   int ABSS=CODE(4,as_abss,as_next,0,0);
   HEADER(1,"=");
-  int EQUAL=CODE(4,as_equal,as_next,0,0); 
+  int EQUAL=CODE(4,as_equal,as_next,0,0);
   HEADER(2,"U<");
-  int ULESS=CODE(4,as_uless,as_next,0,0); 
+  int ULESS=CODE(4,as_uless,as_next,0,0);
   HEADER(1,"<");
   int LESS=CODE(4,as_less,as_next,0,0);
   HEADER(6,"UM/MOD");
@@ -1189,31 +1192,31 @@ int main(void) {
   HEADER(5,"M/MOD");
   int MSMOD=CODE(4,as_msmod,as_next,0,0);
   HEADER(4,"/MOD");
-  int SLMOD=CODE(4,as_slmod,as_next,0,0); 
+  int SLMOD=CODE(4,as_slmod,as_next,0,0);
   HEADER(3,"MOD");
-  int MODD=CODE(4,as_mod,as_next,0,0);   
+  int MODD=CODE(4,as_mod,as_next,0,0);
   HEADER(1,"/");
   int SLASH=CODE(4,as_slash,as_next,0,0);
   HEADER(3,"UM*");
-  int UMSTA=CODE(4,as_umsta,as_next,0,0);   
+  int UMSTA=CODE(4,as_umsta,as_next,0,0);
   HEADER(1,"*");
-  int STAR=CODE(4,as_star,as_next,0,0); 
+  int STAR=CODE(4,as_star,as_next,0,0);
   HEADER(2,"M*");
-  int MSTAR=CODE(4,as_mstar,as_next,0,0); 
+  int MSTAR=CODE(4,as_mstar,as_next,0,0);
   HEADER(5,"*/MOD");
-  int SSMOD=CODE(4,as_ssmod,as_next,0,0); 
+  int SSMOD=CODE(4,as_ssmod,as_next,0,0);
   HEADER(2,"*/");
   int STASL=CODE(4,as_stasl,as_next,0,0);
   HEADER(4,"PICK");
-  int PICK=CODE(4,as_pick,as_next,0,0); 
+  int PICK=CODE(4,as_pick,as_next,0,0);
   HEADER(2,"+!");
-  int PSTOR=CODE(4,as_pstor,as_next,0,0); 
+  int PSTOR=CODE(4,as_pstor,as_next,0,0);
   HEADER(2,"2!");
-  int DSTOR=CODE(4,as_dstor,as_next,0,0); 
+  int DSTOR=CODE(4,as_dstor,as_next,0,0);
   HEADER(2,"2@");
   int DAT=CODE(4,as_dat,as_next,0,0);
   HEADER(5,"COUNT");
-  int COUNT=CODE(4,as_count,as_next,0,0); 
+  int COUNT=CODE(4,as_count,as_next,0,0);
   HEADER(3,"MAX");
   int MAX=CODE(4,as_max,as_next,0,0);
   HEADER(3,"MIN");
@@ -1269,10 +1272,11 @@ int main(void) {
   int WITHI=COLON(7,OVER,SUBBB,TOR,SUBBB,RFROM,ULESS,EXITT);
   HEADER(5,">CHAR");
   int TCHAR=COLON(8,DOLIT,0x7F,ANDD,DUPP,DOLIT,127,BLANK,WITHI);
-  IF(3,DROP,DOLIT,0X5F);
+  IF(3,DROP,DOLIT,'_');
   THEN(1,EXITT);
   HEADER(7,"ALIGNED");
-  int ALIGN=COLON(7,DOLIT,3,PLUS,DOLIT,~sizeof(cell_t),ANDD,EXITT);
+  int ALIGN=COLON(7,DOLIT,sizeof(cell_t)-1,PLUS,
+                  DOLIT,~sizeof(cell_t),ANDD,EXITT);
   HEADER(4,"HERE");
   int HERE=COLON(3,CP,AT,EXITT);
   HEADER(3,"PAD");
@@ -1302,7 +1306,7 @@ int main(void) {
   THEN(0);
   NEXT(2,DDROP,EXITT);
   HEADER(5,"DIGIT");
-  int DIGIT=COLON(12,DOLIT,9,OVER,LESS,DOLIT,7,ANDD,PLUS,DOLIT,0X30,PLUS,EXITT);
+  int DIGIT=COLON(12,DOLIT,9,OVER,LESS,DOLIT,7,ANDD,PLUS,DOLIT,'0',PLUS,EXITT);
   HEADER(7,"EXTRACT");
   int EXTRC=COLON(7,DOLIT,0,SWAP,UMMOD,SWAP,DIGIT,EXITT);
   HEADER(2,"<#");
@@ -1318,7 +1322,7 @@ int main(void) {
   REPEAT(1,EXITT);
   HEADER(4,"SIGN");
   int SIGN=COLON(1,ZLESS);
-  IF(3,DOLIT,0X2D,HOLD);
+  IF(3,DOLIT,'-',HOLD);
   THEN(1,EXITT);
   HEADER(2,"#>");
   int EDIGS=COLON(7,DROP,HLD,AT,PAD,OVER,SUBBB,EXITT);
@@ -1329,19 +1333,19 @@ int main(void) {
   HEADER(7,"DECIMAL");
   int DECIM=COLON(5,DOLIT,10,BASE,STORE,EXITT);
   HEADER(6,"wupper");
-  int UPPER=COLON(4,DOLIT,0x5F5F5F5F,ANDD,EXITT);
+  int UPPER=COLON(1,DOLIT); Comma(UPPER_MASK); Comma(ANDD); Comma(EXITT);
   HEADER(6,">upper");
   int TOUPP=COLON(6,DUPP,DOLIT,0x61,DOLIT,0x7B,WITHI);
   IF(3,DOLIT,0x5F,ANDD);
   THEN(1,EXITT);
   HEADER(6,"DIGIT?");
-  int DIGTQ=COLON(9,TOR,TOUPP,DOLIT,0X30,SUBBB,DOLIT,9,OVER,LESS);
+  int DIGTQ=COLON(9,TOR,TOUPP,DOLIT,'0',SUBBB,DOLIT,9,OVER,LESS);
   IF(8,DOLIT,7,SUBBB,DUPP,DOLIT,10,LESS,ORR);
   THEN(4,DUPP,RFROM,ULESS,EXITT);
   HEADER(7,"NUMBER?");
   int NUMBQ=COLON(12,BASE,AT,TOR,DOLIT,0,OVER,COUNT,OVER,CAT,DOLIT,'$',EQUAL);
   IF(5,HEXX,SWAP,ONEP,SWAP,ONEM);
-  THEN(13,OVER,CAT,DOLIT,0X2D,EQUAL,TOR,SWAP,RAT,SUBBB,SWAP,RAT,PLUS,QDUP);
+  THEN(13,OVER,CAT,DOLIT,'-',EQUAL,TOR,SWAP,RAT,SUBBB,SWAP,RAT,PLUS,QDUP);
   IF(1,ONEM);
   FOR(6,DUPP,TOR,CAT,BASE,AT,DIGTQ);
   WHILE(7,SWAP,BASE,AT,STAR,PLUS,RFROM,ONEP);
@@ -1417,7 +1421,7 @@ int main(void) {
   HEADER(5,"SAME?");
   int SAMEQ=COLON(4,DOLIT,0x1F,ANDD,CELLD);
   FOR(0);
-  AFT(18,OVER,RAT,DOLIT,4,STAR,PLUS,AT,UPPER,OVER,RAT,DOLIT,4,STAR,PLUS,AT,UPPER,SUBBB,QDUP);
+  AFT(14,OVER,RAT,CELLS,PLUS,AT,UPPER,OVER,RAT,CELLS,PLUS,AT,UPPER,SUBBB,QDUP);
   IF(3,RFROM,DROP,EXITT);
   THEN(0);
   THEN(0);
@@ -1438,7 +1442,7 @@ int main(void) {
   HEADER(6,"EXPECT");
   int EXPEC=COLON(5,ACCEP,SPAN,STORE,DROP,EXITT);
   HEADER(5,"QUERY");
-  int QUERY=COLON(12,TIB,DOLIT,0X100,ACCEP,NTIB,STORE,DROP,DOLIT,0,INN,STORE,EXITT);
+  int QUERY=COLON(12,TIB,DOLIT,0x100,ACCEP,NTIB,STORE,DROP,DOLIT,0,INN,STORE,EXITT);
   HEADER(5,"ABORT");
   int ABORT=COLON(4,NOP,TABRT,ATEXE,EXITT);
   HEADER(6,"abort\"");
@@ -1480,7 +1484,7 @@ int main(void) {
   HEADER(5,"ALLOT");
   int ALLOT=COLON(4,ALIGN,CP,PSTOR,EXITT);
   HEADER(3,"$,\"");
-  int STRCQ=COLON(9,DOLIT,0X22,WORDD,COUNT,PLUS,ALIGN,CP,STORE,EXITT);
+  int STRCQ=COLON(9,DOLIT,'"',WORDD,COUNT,PLUS,ALIGN,CP,STORE,EXITT);
   HEADER(7,"?UNIQUE");
   int UNIQU=COLON(3,DUPP,NAMEQ,QDUP);
   IF(6,COUNT,DOLIT,0x1F,ANDD,SPACE,TYPES);

@@ -1,5 +1,5 @@
 # For native
-CFLAGS=-g -m32
+CFLAGS=-g
 
 all: espforth
 
