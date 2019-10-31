@@ -35,7 +35,7 @@ esp_err_t example_configure_stdin_stdout(void)
 }
 #endif
 
-#define DEBUG_COREWORDS 1
+#define DEBUG_COREWORDS 0
 
 typedef intptr_t cell_t;
 typedef uintptr_t ucell_t;
