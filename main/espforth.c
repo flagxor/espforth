@@ -521,7 +521,6 @@ static int duplexread(unsigned char* dst, int sz) {
   int len = 0;
   while (sz > 0) {
     int ch = fgetc(stdin);
-    dst[len++] = ch;
 #ifdef esp32
     if (ch == '\n') {
       fputc('\r', stdout);
@@ -531,6 +530,7 @@ static int duplexread(unsigned char* dst, int sz) {
     if (ch == '\n' || ch < 0) {
       break;
     }
+    dst[len++] = ch;
   }
   return len;
 }
@@ -539,7 +539,6 @@ void accep()
 /* WiFiClient */
 {
   len = duplexread(cData, top);
-  fwrite(cData, 1, len, stdout);
   top = len;
 }
 void qrx(void)
