@@ -53,6 +53,7 @@ typedef uint64_t udcell_t;
 
 #define CELL_BITS (sizeof(cell_t)*8)
 #define PRIxCELL PRIxPTR
+#define CELL_MASK (sizeof(cell_t)-1)
 
 # define  FALSE 0
 # define  TRUE  -1
@@ -94,7 +95,7 @@ void HEADER(int lex, char seq[]) {
   cData[IP++]=lex;
   for (i=0;i<len;i++)
      {cData[IP++]=seq[i];}
-  while (IP%sizeof(cell_t)) {cData[IP++]=0;}
+  while (IP&CELL_MASK) {cData[IP++]=0;}
 #if DEBUG_COREWORDS
   printf("\n");
   printf("%s", seq);
@@ -103,7 +104,7 @@ void HEADER(int lex, char seq[]) {
 #endif
 }
 static int WithPadding(int sz) {
-  return (sz + sizeof(cell_t) - 1) / sizeof(cell_t) * sizeof(cell_t);
+  return (sz + CELL_MASK) & ~CELL_MASK;
 }
 int CODE(int len, ... ) {
   int total = WithPadding(len);
@@ -786,7 +787,6 @@ void dat(void)
 
 void count(void)
 {   stack[(unsigned char)++S] = top + 1;
-fprintf(stderr, ":: "); fwrite(&cData[top+1], 1, cData[top], stderr); fprintf(stderr, "\n");
   top = cData[top]; }
 
 void dovar(void)
@@ -1029,7 +1029,7 @@ static void run() {
     data[0x66] = 0;                   // >IN
     data[0x67] = len;                 // #TIB
     data[0x68] = 0;                   // 'TIB
-    P = 0x64 * sizeof(cell_t);        // EVAL
+    P = 0x60 * sizeof(cell_t);        // EVAL
     WP = P + sizeof(cell_t);
     evaluate();
     len = duplexread(cData, 255);
@@ -1048,7 +1048,7 @@ int main(void) {
   printf("booting...\n");
   fflush(stdout);
 #endif
-  P = 0x64 * sizeof(cell_t);
+  P = 0x60 * sizeof(cell_t);
   WP = P + sizeof(cell_t);
   IP = 0;
   S = 0;
@@ -1275,8 +1275,8 @@ int main(void) {
   IF(3,DROP,DOLIT,'_');
   THEN(1,EXITT);
   HEADER(7,"ALIGNED");
-  int ALIGN=COLON(7,DOLIT,sizeof(cell_t)-1,PLUS,
-                  DOLIT,~sizeof(cell_t),ANDD,EXITT);
+  int ALIGN=COLON(7,DOLIT,CELL_MASK,PLUS,
+                  DOLIT,~CELL_MASK,ANDD,EXITT);
   HEADER(4,"HERE");
   int HERE=COLON(3,CP,AT,EXITT);
   HEADER(3,"PAD");
@@ -1409,7 +1409,7 @@ int main(void) {
   THEN(6,OVER,SUBBB,RFROM,RFROM,SUBBB,EXITT);
   THEN(4,OVER,RFROM,SUBBB,EXITT);
   HEADER(5,"PACK$");
-  int PACKS=COLON(18,DUPP,TOR,DDUP,PLUS,DOLIT,~sizeof(cell_t),ANDD,DOLIT,0,SWAP,STORE,DDUP,CSTOR,ONEP,SWAP,CMOVEE,RFROM,EXITT);
+  int PACKS=COLON(18,DUPP,TOR,DDUP,PLUS,DOLIT,~CELL_MASK,ANDD,DOLIT,0,SWAP,STORE,DDUP,CSTOR,ONEP,SWAP,CMOVEE,RFROM,EXITT);
   HEADER(5,"PARSE");
   int PARSE=COLON(15,TOR,TIB,INN,AT,PLUS,NTIB,AT,INN,AT,SUBBB,RFROM,PARS,INN,PSTOR,EXITT);
   HEADER(5,"TOKEN");
@@ -1669,9 +1669,23 @@ int main(void) {
   printf(" R-stack= ");
   printf("%" PRIxCELL, popR*sizeof(cell_t));
 #endif
-  IP = 0x64 * sizeof(cell_t);
-  int USER=LABEL(16,6,EVAL,0,0,0,0,0,0,0,0x10,
-                 IMMED-WithPadding(10),ENDD,IMMED-WithPadding(10),INTER,EVAL,0);
+  IP = 0x60 * sizeof(cell_t);
+  int USER=LABEL(18,
+                 as_dolist,EVAL,0,0,
+                 0,  // HLD
+                 0,  // SPAN
+                 0,  // >IN
+                 0,  // #TIB
+                 0,  // 'TIB
+                 0x10,  // BASE
+                 IMMED-WithPadding(10), // CONTEXT
+                 ENDD,  // CP
+                 IMMED-WithPadding(10), // LAST
+                 INTER,  // 'EVAL
+                 EVAL,  // 'ABORT
+                 0,  // tmp
+                 0,  // ppqn
+                 0);  // channel
 
 #if DEBUG_COREWORDS
   // dump dictionary
