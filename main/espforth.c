@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <inttypes.h>
+
 #ifdef esp32
 #  include "freertos/FreeRTOS.h"
 #  include "freertos/task.h"
@@ -17,7 +18,12 @@
 #  include "esp_err.h"
 #  include "esp_vfs_dev.h"
 #  include "driver/uart.h"
+#else
+#  include <termios.h>
+#  include <unistd.h>
+#endif
 
+#ifdef esp32
 esp_err_t example_configure_stdin_stdout(void)
 {
     // Initialize VFS & UART so we can use std::cout/cin
@@ -32,6 +38,22 @@ esp_err_t example_configure_stdin_stdout(void)
     /* Move the caret to the beginning of the next line on '\n' */
     esp_vfs_dev_uart_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
     return ESP_OK;
+}
+#else
+static struct termios terminalOld;
+static void RestoreTerminal(void) {
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminalOld);
+}
+static void SetupTerminal(void) {
+  setvbuf(stdin, NULL, _IONBF, 0);
+  setvbuf(stdout, NULL, _IONBF, 0);
+
+  tcgetattr(STDIN_FILENO, &terminalOld);
+  atexit(RestoreTerminal);
+  struct termios t = terminalOld;
+  t.c_lflag &= ~ECHO;
+  t.c_lflag &= ~ICANON;
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &t);
 }
 #endif
 
@@ -521,12 +543,19 @@ static int duplexread(unsigned char* dst, int sz) {
   int len = 0;
   while (sz > 0) {
     int ch = fgetc(stdin);
-#ifdef esp32
+    if (ch == 127 || ch == 8) {
+      if (len > 0) {
+        fputc(8, stdout);
+        fputc(' ', stdout);
+        fputc(8, stdout);
+        --len;
+      }
+      continue;
+    }
     if (ch == '\n') {
       fputc('\r', stdout);
     }
     fputc(ch, stdout);
-#endif
     if (ch == '\n' || ch < 0) {
       break;
     }
@@ -1042,10 +1071,11 @@ int main(void) {
 #endif
 #ifdef esp32
   example_configure_stdin_stdout();
+#else
+  SetupTerminal();
 #endif
 #if 0
   printf("booting...\n");
-  fflush(stdout);
 #endif
   P = 0x60 * sizeof(cell_t);
   WP = P + sizeof(cell_t);
