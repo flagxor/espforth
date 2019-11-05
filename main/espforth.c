@@ -794,7 +794,11 @@ void evaluate()
 {
   for(;;) {
     unsigned char bytecode = cData[P++];
-    //printf("%d ", bytecode);
+#if 0
+    printf("%d: %d %d %d | %d %d %d\n",
+      bytecode, (int)stack[0], (int)stack[1], (int)stack[2],
+      (int)rack[0], (int)rack[1], (int)rack[2]);
+#endif
     if (bytecode) primitives[bytecode]();
     else break;
   }
