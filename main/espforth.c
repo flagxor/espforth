@@ -569,7 +569,11 @@ void freq(void)
    pop;
 }
 
-void (*primitives[73])(void) = {
+void terminate(void) {
+  exit(top);
+}
+
+void (*primitives[74])(void) = {
     /* case 0 */ nop,
     /* case 1 */ accep,
     /* case 2 */ qrx,
@@ -642,7 +646,8 @@ void (*primitives[73])(void) = {
     /* case 69 */ pin,
     /* case 70 */ duty,
     /* case 71 */ freq,
-    /* case 72 */ ms };
+    /* case 72 */ ms,
+    /* case 73 */ terminate };
 
 int as_nop=0;
 int as_accept=1;
@@ -717,6 +722,7 @@ int as_pin=69;
 int as_duty=70;
 int as_freq=71;
 int as_ms=72;
+int as_terminate=73;
 
 int CODE(const char *name, ... ) {
   HEADER(name);
@@ -925,7 +931,9 @@ int main(void) {
   int DUTY=CODE("DUTY", as_duty, as_next);
   int FREQ=CODE("FREQ", as_freq, as_next);
   int MS=CODE("MS", as_ms, as_next);
+  int TERMINATE=CODE("TERMINATE", as_terminate, as_next);
 
+  int BYE=COLON("BYE", DOLIT, 0, TERMINATE, EXITT);
   int KEY=COLON("KEY", BEGIN, QKEY, UNTIL, EXITT);
   int WITHI=COLON("WITHIN", OVER,SUBBB,TOR,SUBBB,RFROM,ULESS,EXITT);
   int TCHAR=COLON(">CHAR", DOLIT,0x7F,ANDD,DUPP,DOLIT,127,BLANK,WITHI,
