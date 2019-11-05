@@ -88,15 +88,14 @@ typedef uint64_t udcell_t;
 
 cell_t rack[256] = {0};
 cell_t stack[256] = {0};
-unsigned char R, S, bytecode ;
+unsigned char R=0, S=0;
 cell_t* Pointer ;
 cell_t  P, IP, WP, top, links, len ;
 uint8_t* cData ;
 dcell_t d, n, m ;
 
-int EXITT=0,BRAN=0,QBRAN=0,DONXT=0,DOTQP=0,STRQP=0,TOR=0,ABORQP=0;
+int EXITT=0,BRAN=0,QBRAN=0,DOLIT=0,DONXT=0,DOTQP=0,STRQP=0,TOR=0,ABORQP=0;
 
-//#include "rom_54.h" /* load dictionary */
 cell_t data[16000] = {};
 int IMEDD=0x80;
 int COMPO=0x40;
@@ -150,31 +149,6 @@ static void Comma(cell_t n) {
   IP=P*sizeof(cell_t);
 }
 
-int COLON_OLD(int len, ... ) {
-  int addr=IP;
-  P=IP/sizeof(cell_t);
-  data[P++]=6; // dolist
-  va_list argList;
-  va_start(argList, len);
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%x", addr);
-  printf(" ");
-  printf("6");
-#endif
-  for(; len;len--) {
-    int j=va_arg(argList, int);
-    data[P++]=j;
-#if DEBUG_COREWORDS
-    printf(" ");
-    printf("%" PRIxCELL, data[P-1]);
-#endif
-  }
-  IP=P*sizeof(cell_t);
-  va_end(argList);
-  return addr;
-}
-
 int LABEL(int len, ... ) {
   int addr=IP;
   P=IP/sizeof(cell_t);
@@ -195,311 +169,41 @@ int LABEL(int len, ... ) {
   IP=P*sizeof(cell_t);
   va_end(argList);
   return addr;
-  }
-void BEGIN(int len, ... ) {
-  P=IP/sizeof(cell_t);
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" BEGIN ");
-#endif
-  pushR=P;
-  va_list argList;
-  va_start(argList, len);
-  for(; len;len--) {
-    int j=va_arg(argList, int);
-    data[P++]=j;
-#if DEBUG_COREWORDS
-    printf(" ");
-    printf("%x", j);
-#endif
-  }
-  IP=P*sizeof(cell_t);
-  va_end(argList);
 }
-void AGAIN(int len, ... ) {
+
+#define STR_LIKE(op) \
+  str = va_arg(argList, const char*); \
+  int len = strlen(str); \
+  data[P++] = op; \
+  IP=P*sizeof(cell_t); \
+  cData[IP++]=len; \
+  for (i=0;i<len;i++) cData[IP++]=str[i]; \
+  while (IP & CELL_MASK) cData[IP++]=0; \
   P=IP/sizeof(cell_t);
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" AGAIN ");
-#endif
-  data[P++]=BRAN;
-  data[P++]=popR*sizeof(cell_t);
-  va_list argList;
-  va_start(argList, len);
-  for(; len;len--) {
-    int j=va_arg(argList, int);
-    data[P++]=j;
-#if DEBUG_COREWORDS
-    printf(" ");
-    printf("%x", j);
-#endif
-  }
-  IP=P*sizeof(cell_t);
-  va_end(argList);
-  }
-void UNTIL(int len, ... ) {
-  P=IP/sizeof(cell_t);
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" UNTIL ");
-#endif
-  data[P++]=QBRAN;
-  data[P++]=popR*sizeof(cell_t);
-  va_list argList;
-  va_start(argList, len);
-  for(; len;len--) {
-    int j=va_arg(argList, int);
-    data[P++]=j;
-#if DEBUG_COREWORDS
-    printf(" ");
-    printf("%x", j);
-#endif
-  }
-  IP=P*sizeof(cell_t);
-  va_end(argList);
-  }
-void WHILE(int len, ... ) {
-  P=IP/sizeof(cell_t);
-  int k;
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" WHILE ");
-#endif
-  data[P++]=QBRAN;
-  data[P++]=0;
-  k=popR;
-  pushR=(P-1);
-  pushR=k;
-  va_list argList;
-  va_start(argList, len);
-  for(; len;len--) {
-    int j=va_arg(argList, int);
-    data[P++]=j;
-#if DEBUG_COREWORDS
-    printf(" ");
-    printf("%x", j);
-#endif
-  }
-  IP=P*sizeof(cell_t);
-  va_end(argList);
-  }
-void REPEAT(int len, ... ) {
-  P=IP/sizeof(cell_t);
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" REPEAT ");
-#endif
-  data[P++]=BRAN;
-  data[P++]=popR*sizeof(cell_t);
-  data[popR]=P*sizeof(cell_t);
-  va_list argList;
-  va_start(argList, len);
-  for(; len;len--) {
-    int j=va_arg(argList, int);
-    data[P++]=j;
-#if DEBUG_COREWORDS
-    printf(" ");
-    printf("%x", j);
-#endif
-  }
-  IP=P*sizeof(cell_t);
-  va_end(argList);
-  }
-void IF(int len, ... ) {
-  P=IP/sizeof(cell_t);
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" IF ");
-#endif
-  data[P++]=QBRAN;
-  pushR=P;
-  data[P++]=0;
-  va_list argList;
-  va_start(argList, len);
-  for(; len;len--) {
-    int j=va_arg(argList, int);
-    data[P++]=j;
-#if DEBUG_COREWORDS
-    printf(" ");
-    printf("%x", j);
-#endif
-  }
-  IP=P*sizeof(cell_t);
-  va_end(argList);
-  }
-void ELSE(int len, ... ) {
-  P=IP/sizeof(cell_t);
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" ELSE ");
-#endif
-  data[P++]=BRAN;
-  data[P++]=0;
-  data[popR]=P*sizeof(cell_t);
-  pushR=P-1;
-  va_list argList;
-  va_start(argList, len);
-  for(; len;len--) {
-    int j=va_arg(argList, int);
-    data[P++]=j;
-#if DEBUG_COREWORDS
-    printf(" ");
-    printf("%x", j);
-#endif
-  }
-  IP=P*sizeof(cell_t);
-  va_end(argList);
-  }
-void THEN(int len, ... ) {
-  P=IP/sizeof(cell_t);
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" THEN ");
-#endif
-  data[popR]=P*sizeof(cell_t);
-  va_list argList;
-  va_start(argList, len);
-  for(; len;len--) {
-    int j=va_arg(argList, int);
-    data[P++]=j;
-#if DEBUG_COREWORDS
-    printf(" ");
-    printf("%x", j);
-#endif
-  }
-  IP=P*sizeof(cell_t);
-  va_end(argList);
-  }
-void FOR(int len, ... ) {
-  P=IP/sizeof(cell_t);
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" FOR ");
-#endif
-  data[P++]=TOR;
-  pushR=P;
-  va_list argList;
-  va_start(argList, len);
-  for(; len;len--) {
-    int j=va_arg(argList, int);
-    data[P++]=j;
-#if DEBUG_COREWORDS
-    printf(" ");
-    printf("%x", j);
-#endif
-  }
-  IP=P*sizeof(cell_t);
-  va_end(argList);
-  }
-void NEXT(int len, ... ) {
-  P=IP/sizeof(cell_t);
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" NEXT ");
-#endif
-  data[P++]=DONXT;
-  data[P++]=popR*sizeof(cell_t);
-  va_list argList;
-  va_start(argList, len);
-  for(; len;len--) {
-    int j=va_arg(argList, int);
-    data[P++]=j;
-#if DEBUG_COREWORDS
-    printf(" ");
-    printf("%x", j);
-#endif
-  }
-  IP=P*sizeof(cell_t);
-  va_end(argList);
-  }
-void AFT(int len, ... ) {
-  P=IP/sizeof(cell_t);
-  int k;
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" AFT ");
-#endif
-  data[P++]=BRAN;
-  data[P++]=0;
-  k=popR;
-  (void)k;
-  pushR=P;
-  pushR=P-1;
-  va_list argList;
-  va_start(argList, len);
-  for(; len;len--) {
-    int j=va_arg(argList, int);
-    data[P++]=j;
-#if DEBUG_COREWORDS
-    printf(" ");
-    printf("%x", j);
-#endif
-  }
-  IP=P*sizeof(cell_t);
-  va_end(argList);
-  }
-void DOTQ(char seq[]) {
-  P=IP/sizeof(cell_t);
-  int i;
-  int len=strlen(seq);
-  data[P++]=DOTQP;
-  IP=P*sizeof(cell_t);
-  cData[IP++]=len;
-  for (i=0;i<len;i++)
-     {cData[IP++]=seq[i];}
-  while (IP%sizeof(cell_t)) {cData[IP++]=0;}
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" ");
-  printf("%s", seq);
-#endif
-}
-void STRQ(char seq[]) {
-  P=IP/sizeof(cell_t);
-  int i;
-  int len=strlen(seq);
-  data[P++]=STRQP;
-  IP=P*sizeof(cell_t);
-  cData[IP++]=len;
-  for (i=0;i<len;i++)
-     {cData[IP++]=seq[i];}
-  while (IP%sizeof(cell_t)) {cData[IP++]=0;}
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" ");
-  printf("%s", seq);
-#endif
-}
-void ABORQ(char seq[]) {
-  P=IP/sizeof(cell_t);
-  int i;
-  int len=strlen(seq);
-  data[P++]=ABORQP;
-  IP=P*sizeof(cell_t);
-  cData[IP++]=len;
-  for (i=0;i<len;i++)
-     {cData[IP++]=seq[i];}
-  while (IP%sizeof(cell_t)) {cData[IP++]=0;}
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%" PRIxCELL, IP);
-  printf(" ");
-  printf("%s", seq);
-#endif
-}
+
+#define MACRO_LIST \
+  X(BEGIN, pushR=P) \
+  X(AGAIN, data[P++]=BRAN; data[P++]=popR*sizeof(cell_t)) \
+  X(UNTIL, data[P++]=QBRAN; data[P++]=popR*sizeof(cell_t)) \
+  X(WHILE, data[P++]=QBRAN; data[P++]=0; k=popR; pushR=(P-1); pushR=k) \
+  X(REPEAT, data[P++]=BRAN; data[P++]=popR*sizeof(cell_t); \
+            data[popR]=P*sizeof(cell_t)) \
+  X(IF, data[P++]=QBRAN; pushR=P; data[P++]=0) \
+  X(ELSE, data[P++]=BRAN; data[P++]=0; data[popR]=P*sizeof(cell_t); pushR=P-1) \
+  X(THEN, data[popR]=P*sizeof(cell_t)) \
+  X(FOR, data[P++]=TOR; pushR=P) \
+  X(NEXT, data[P++]=DONXT; data[P++]=popR*sizeof(cell_t)) \
+  X(AFT, data[P++]=BRAN; data[P++]=0; k=popR; pushR=P; pushR=P-1) \
+  X(DOTQ, STR_LIKE(DOTQP)) \
+  X(STRQ, STR_LIKE(STRQP)) \
+  X(ABORTQ, STR_LIKE(ABORQP))
+
+enum {
+  UNUSED_MACRO=0x80000000,
+#define X(name, code) name,
+MACRO_LIST
+#undef X
+};
 
 void CheckSum() {
   int i;
@@ -512,20 +216,6 @@ void CheckSum() {
   }
   printf(" %02x",sum);
 }
-/******************************************************************************/
-/* ledc                                                                       */
-/******************************************************************************/
-/* LEDC Software Fade */
-// use first channel of 16 channels (started from zero)
-#define LEDC_CHANNEL_0     0
-// use 13 bit precission for LEDC timer
-#define LEDC_TIMER_13_BIT  13
-// use 5000 Hz as a LEDC base frequency
-#define LEDC_BASE_FREQ     5000
-// fade LED PIN (replace with LED_BUILTIN constant for built-in LED)
-#define LED_PIN            5
-int brightness = 255;    // how bright the LED is
-
 /******************************************************************************/
 /* PRIMITIVES                                                                 */
 /******************************************************************************/
@@ -1031,22 +721,18 @@ int as_ms=72;
 int CODE(const char *name, ... ) {
   HEADER(name);
   int addr=IP;
-  int s;
-  int len = 0;
+  cell_t s;
   va_list argList;
   va_start(argList, name);
   do {
-    s = va_arg(argList, int);
+    s = va_arg(argList, cell_t);
     cData[IP++] = s;
-    ++len;
 #if DEBUG_COREWORDS
     printf(" ");
-    printf("%x", s);
+    printf("%" PRIxCELL, s);
 #endif
   } while(s != as_next);
-  int total = WithPadding(len);
-  int padding = total - len;
-  for (; padding; --padding) {
+  while (IP & CELL_MASK) {
     cData[IP++]=0;
   }
   va_end(argList);
@@ -1066,15 +752,24 @@ int COLON_WITH_FLAGS(int flags, const char *name, ...) {
   printf(" ");
   printf("6");
 #endif
-  int j;
+  int last=0, word=0, i, k;
+  const char *str;
   do {
-    j = va_arg(argList, int);
-    data[P++]=j;
+    last = word;
+    word = va_arg(argList, int);
+    switch (word) {
+#define X(name, code) case name: { code; } break;
+      MACRO_LIST
+#undef X
+      default:
+        data[P++] = word;
 #if DEBUG_COREWORDS
-    printf(" ");
-    printf("%" PRIxCELL, data[P-1]);
+        printf(" ");
+        printf("%" PRIxCELL, data[P-1]);
 #endif
-  } while (j != EXITT);
+       break;
+    }
+  } while (word != EXITT || R > 0 || last == DOLIT);
   IP=P*sizeof(cell_t);
   va_end(argList);
   return addr;
@@ -1092,7 +787,7 @@ static int CONSTANT(const char *name, cell_t n) {
 void evaluate()
 {
   for(;;) {
-    bytecode=(unsigned char)cData[P++];
+    unsigned char bytecode = cData[P++];
     //printf("%d ", bytecode);
     if (bytecode) primitives[bytecode]();
     else break;
@@ -1125,9 +820,6 @@ int main(void) {
 #else
   SetupTerminal();
 #endif
-#if 0
-  printf("booting...\n");
-#endif
   P = 0x60 * sizeof(cell_t);
   WP = P + sizeof(cell_t);
   IP = 0;
@@ -1135,23 +827,6 @@ int main(void) {
   R = 0;
   top = 0;
   cData = (uint8_t *) data;
-
-#if 0
-// Setup timer and attach timer to a led pin
-  ledcSetup(0, 100, LEDC_TIMER_13_BIT);
-  ledcAttachPin(5, 0);
-  ledcAnalogWrite(0, 250, brightness);
-  pinMode(2,OUTPUT);
-  digitalWrite(2, HIGH);   // turn the LED2 on
-  pinMode(16,OUTPUT);
-  digitalWrite(16, LOW);   // motor1 forward
-  pinMode(17,OUTPUT);
-  digitalWrite(17, LOW);   // motor1 backward
-  pinMode(18,OUTPUT);
-  digitalWrite(18, LOW);   // motor2 forward
-  pinMode(19,OUTPUT);
-  digitalWrite(19, LOW);   // motor2 bacward
-#endif
 
   IP=128 * sizeof(cell_t);
   cell_t datap = 0x64 * sizeof(cell_t) - sizeof(cell_t);
@@ -1176,7 +851,7 @@ int main(void) {
   int ACCEP=CODE("ACCEPT", as_accept, as_next);
   int QKEY=CODE("?KEY", as_qrx, as_next);
   int EMIT=CODE("EMIT", as_txsto, as_next);
-  int DOLIT=CODE("DOLIT", as_dolit, as_next);
+  DOLIT=CODE("DOLIT", as_dolit, as_next);
   int DOLST=CODE("DOLIST", as_dolist, as_next);
   EXITT=CODE("EXIT", as_exit, as_next);
   int EXECU=CODE("EXECUTE", as_execu, as_next);
@@ -1251,266 +926,155 @@ int main(void) {
   int FREQ=CODE("FREQ", as_freq, as_next);
   int MS=CODE("MS", as_ms, as_next);
 
-  HEADER("KEY");
-  int KEY=COLON_OLD(0);
-  BEGIN(1,QKEY);
-  UNTIL(1,EXITT);
+  int KEY=COLON("KEY", BEGIN, QKEY, UNTIL, EXITT);
   int WITHI=COLON("WITHIN", OVER,SUBBB,TOR,SUBBB,RFROM,ULESS,EXITT);
-  HEADER(">CHAR");
-  int TCHAR=COLON_OLD(8,DOLIT,0x7F,ANDD,DUPP,DOLIT,127,BLANK,WITHI);
-  IF(3,DROP,DOLIT,'_');
-  THEN(1,EXITT);
-  HEADER("ALIGNED");
-  int ALIGN=COLON_OLD(7,DOLIT,CELL_MASK,PLUS,
-                  DOLIT,~CELL_MASK,ANDD,EXITT);
+  int TCHAR=COLON(">CHAR", DOLIT,0x7F,ANDD,DUPP,DOLIT,127,BLANK,WITHI,
+                  IF, DROP,DOLIT,'_', THEN ,EXITT);
+  int ALIGN=COLON("ALIGNED", DOLIT,CELL_MASK,PLUS, DOLIT,~CELL_MASK,ANDD,EXITT);
   int HERE=COLON("HERE", CP,AT,EXITT);
   int PAD=COLON("PAD", HERE,DOLIT,80,PLUS,EXITT);
   int TIB=COLON("TIB", TTIB,AT,EXITT);
-  HEADER("@EXECUTE");
-  int ATEXE=COLON_OLD(2,AT,QDUP);
-  IF(1,EXECU);
-  THEN(1,EXITT);
-  HEADER("CMOVE");
-  int CMOVEE=COLON_OLD(0);
-  FOR(0);
-  AFT(8,OVER,CAT,OVER,CSTOR,TOR,ONEP,RFROM,ONEP);
-  THEN(0);
-  NEXT(2,DDROP,EXITT);
-  HEADER("MOVE");
-  int MOVE=COLON_OLD(1,CELLD);
-  FOR(0);
-  AFT(8,OVER,AT,OVER,STORE,TOR,CELLP,RFROM,CELLP);
-  THEN(0);
-  NEXT(2,DDROP,EXITT);
-  HEADER("FILL");
-  int FILL=COLON_OLD(1,SWAP);
-  FOR(1,SWAP);
-  AFT(3,DDUP,CSTOR,ONEP);
-  THEN(0);
-  NEXT(2,DDROP,EXITT);
+  int ATEXE=COLON("@EXECUTE", AT,QDUP,IF,EXECU,THEN,EXITT);
+  int CMOVEE=COLON("CMOVE", FOR,AFT,OVER,CAT,OVER,CSTOR,TOR,ONEP,RFROM,ONEP,
+                            THEN,NEXT,DDROP,EXITT);
+  int MOVE=COLON("MOVE", CELLD,FOR,AFT,OVER,AT,OVER,STORE,TOR,CELLP,RFROM,CELLP,
+                         THEN,NEXT,DDROP,EXITT);
+  int FILL=COLON("FILL", SWAP,FOR,SWAP,AFT,DDUP,CSTOR,ONEP,THEN,NEXT,
+                         DDROP,EXITT);
   int DIGIT=COLON("DIGIT", DOLIT,9,OVER,LESS,DOLIT,7,ANDD,PLUS,
                            DOLIT,'0',PLUS,EXITT);
   int EXTRC=COLON("EXTRACT", DOLIT,0,SWAP,UMMOD,SWAP,DIGIT,EXITT);
   int BDIGS=COLON("<#", PAD,HLD,STORE,EXITT);
   int HOLD=COLON("HOLD", HLD,AT,ONEM,DUPP,HLD,STORE,CSTOR,EXITT);
   int DIG=COLON("#", BASE,AT,EXTRC,HOLD,EXITT);
-  HEADER("#S");
-  int DIGS=COLON_OLD(0);
-  BEGIN(2,DIG,DUPP);
-  WHILE(0);
-  REPEAT(1,EXITT);
-  HEADER("SIGN");
-  int SIGN=COLON_OLD(1,ZLESS);
-  IF(3,DOLIT,'-',HOLD);
-  THEN(1,EXITT);
+  int DIGS=COLON("#S", BEGIN,DIG,DUPP,WHILE,REPEAT,EXITT);
+  int SIGN=COLON("SIGN", ZLESS,IF,DOLIT,'-',HOLD,THEN,EXITT);
   int EDIGS=COLON("#>", DROP,HLD,AT,PAD,OVER,SUBBB,EXITT);
   int STRR=COLON("str", DUPP,TOR,ABSS,BDIGS,DIGS,RFROM,SIGN,EDIGS,EXITT);
   int HEXX=COLON("HEX", DOLIT,16,BASE,STORE,EXITT);
   int DECIM=COLON("DECIMAL", DOLIT,10,BASE,STORE,EXITT);
-  HEADER("wupper");
-  int UPPER=COLON_OLD(1,DOLIT); Comma(UPPER_MASK); Comma(ANDD); Comma(EXITT);
-  HEADER(">upper");
-  int TOUPP=COLON_OLD(6,DUPP,DOLIT,'a',DOLIT,'{',WITHI);
-  IF(3,DOLIT,0x5F,ANDD);
-  THEN(1,EXITT);
-  HEADER("DIGIT?");
-  int DIGTQ=COLON_OLD(9,TOR,TOUPP,DOLIT,'0',SUBBB,DOLIT,9,OVER,LESS);
-  IF(8,DOLIT,7,SUBBB,DUPP,DOLIT,10,LESS,ORR);
-  THEN(4,DUPP,RFROM,ULESS,EXITT);
-  HEADER("NUMBER?");
-  int NUMBQ=COLON_OLD(12,BASE,AT,TOR,DOLIT,0,OVER,COUNT,OVER,CAT,DOLIT,'$',EQUAL);
-  IF(5,HEXX,SWAP,ONEP,SWAP,ONEM);
-  THEN(13,OVER,CAT,DOLIT,'-',EQUAL,TOR,SWAP,RAT,SUBBB,SWAP,RAT,PLUS,QDUP);
-  IF(1,ONEM);
-  FOR(6,DUPP,TOR,CAT,BASE,AT,DIGTQ);
-  WHILE(7,SWAP,BASE,AT,STAR,PLUS,RFROM,ONEP);
-  NEXT(2,DROP,RAT);
-  IF(1,NEGAT);
-  THEN(1,SWAP);
-  ELSE(6,RFROM,RFROM,DDROP,DDROP,DOLIT,0);
-  THEN(1,DUPP);
-  THEN(6,RFROM,DDROP,RFROM,BASE,STORE,EXITT);
+  int UPPER=COLON("wupper", DOLIT,UPPER_MASK,ANDD,EXITT);
+  int TOUPP=COLON(">upper", DUPP,DOLIT,'a',DOLIT,'{',WITHI,IF,
+                            DOLIT,0x5F,ANDD,THEN,EXITT);
+  int DIGTQ=COLON("DIGIT?", TOR,TOUPP,DOLIT,'0',SUBBB,DOLIT,9,OVER,LESS,
+                            IF,DOLIT,7,SUBBB,DUPP,DOLIT,10,LESS,ORR,THEN,
+                            DUPP,RFROM,ULESS,EXITT);
+  int NUMBQ=COLON("NUMBER?", BASE,AT,TOR,DOLIT,0,OVER,COUNT,OVER,CAT,
+                             DOLIT,'$',EQUAL,IF,HEXX,SWAP,ONEP,SWAP,ONEM,THEN,
+                             OVER,CAT,DOLIT,'-',EQUAL,TOR,SWAP,RAT,SUBBB,
+                             SWAP,RAT,PLUS,QDUP,IF,ONEM,
+                             FOR,DUPP,TOR,CAT,BASE,AT,DIGTQ,
+                             WHILE,SWAP,BASE,AT,STAR,PLUS,RFROM,ONEP,NEXT,
+                             DROP,RAT,IF,NEGAT,THEN,SWAP,
+                             ELSE,RFROM,RFROM,DDROP,DDROP,DOLIT,0,THEN,
+                             DUPP,THEN,RFROM,DDROP,RFROM,BASE,STORE,EXITT);
   int SPACE=COLON("SPACE", BLANK,EMIT,EXITT);
-  HEADER("CHARS");
-  int CHARS=COLON_OLD(4,SWAP,DOLIT,0,MAX);
-  FOR(0);
-  AFT(2,DUPP,EMIT);
-  THEN(0);
-  NEXT(2,DROP,EXITT);
+  int CHARS=COLON("CHARS", SWAP,DOLIT,0,MAX,FOR,AFT,DUPP,EMIT,THEN,NEXT,
+                           DROP,EXITT);
   int SPACS=COLON("SPACES", BLANK,CHARS,EXITT);
-  HEADER("TYPE");
-  int TYPES=COLON_OLD(0);
-  FOR(0);
-  AFT(5,DUPP,CAT,TCHAR,EMIT,ONEP);
-  THEN(0);
-  NEXT(2,DROP,EXITT);
+  int TYPES=COLON("TYPE",
+    FOR,AFT,DUPP,CAT,TCHAR,EMIT,ONEP,THEN,NEXT,DROP,EXITT);
   int CR=COLON("CR", DOLIT,'\n',DOLIT,'\r',EMIT,EMIT,EXITT);
   int DOSTR=COLON("do$", RFROM,RAT,RFROM,COUNT,PLUS,ALIGN,TOR,SWAP,TOR,EXITT);
   int STRQP=COLON("$\"|", DOSTR,EXITT);
   DOTQP=COLON(".\"|", DOSTR,COUNT,TYPES,EXITT);
   int DOTR=COLON(".R", TOR,STRR,RFROM,OVER,SUBBB,SPACS,TYPES,EXITT);
-  int UDOTR=COLON("U.R", TOR,BDIGS,DIGS,EDIGS,RFROM,OVER,SUBBB,SPACS,TYPES,EXITT);
+  int UDOTR=COLON("U.R",
+    TOR,BDIGS,DIGS,EDIGS,RFROM,OVER,SUBBB,SPACS,TYPES,EXITT);
   int UDOT=COLON("U.", BDIGS,DIGS,EDIGS,SPACE,TYPES,EXITT);
-  HEADER(".");
-  int DOT=COLON_OLD(5,BASE,AT,DOLIT,10,XORR);
-  IF(3,UDOT,EXITT);
-  THEN(4,STRR,SPACE,TYPES,EXITT);
+  int DOT=COLON(".", BASE,AT,DOLIT,10,XORR,IF,UDOT,EXITT,THEN,
+                     STRR,SPACE,TYPES,EXITT);
   int QUEST=COLON("?", AT,DOT,EXITT);
-  HEADER("(parse)");
-  int PARS=COLON_OLD(5,TEMP,CSTOR,OVER,TOR,DUPP);
-  IF(5,ONEM,TEMP,CAT,BLANK,EQUAL);
-  IF(0);
-  FOR(6,BLANK,OVER,CAT,SUBBB,ZLESS,INVER);
-  WHILE(1,ONEP);
-  NEXT(6,RFROM,DROP,DOLIT,0,DUPP,EXITT);
-  THEN(1,RFROM);
-  THEN(2,OVER,SWAP);
-  FOR(9,TEMP,CAT,OVER,CAT,SUBBB,TEMP,CAT,BLANK,EQUAL);
-  IF(1,ZLESS);
-  THEN(0);
-  WHILE(1,ONEP);
-  NEXT(2,DUPP,TOR);
-  ELSE(5,RFROM,DROP,DUPP,ONEP,TOR);
-  THEN(6,OVER,SUBBB,RFROM,RFROM,SUBBB,EXITT);
-  THEN(4,OVER,RFROM,SUBBB,EXITT);
+  int PARS=COLON("(parse)", TEMP,CSTOR,OVER,TOR,DUPP,IF,
+                              ONEM,TEMP,CAT,BLANK,EQUAL,IF,
+                                FOR,BLANK,OVER,CAT,SUBBB,ZLESS,INVER,
+                                  WHILE,ONEP,
+                                NEXT,
+                                RFROM,DROP,DOLIT,0,DUPP,EXITT,
+                              THEN,RFROM,
+                            THEN,OVER,SWAP,
+                            FOR,TEMP,CAT,OVER,CAT,SUBBB,TEMP,CAT,BLANK,EQUAL,
+                              IF,ZLESS,THEN,
+                              WHILE,ONEP,
+                            NEXT,DUPP,TOR,
+                            ELSE,RFROM,DROP,DUPP,ONEP,TOR,
+                            THEN,OVER,SUBBB,RFROM,RFROM,SUBBB,EXITT,
+                            THEN,OVER,RFROM,SUBBB,EXITT);
   int PACKS=COLON("PACK$", DUPP,TOR,DDUP,PLUS,DOLIT,~CELL_MASK,ANDD,DOLIT,0,SWAP,STORE,DDUP,CSTOR,ONEP,SWAP,CMOVEE,RFROM,EXITT);
   int PARSE=COLON("PARSE", TOR,TIB,INN,AT,PLUS,NTIB,AT,INN,AT,SUBBB,RFROM,PARS,INN,PSTOR,EXITT);
   int TOKEN=COLON("TOKEN", BLANK,PARSE,DOLIT,0x1F,MIN,HERE,CELLP,PACKS,EXITT);
   int WORDD=COLON("WORD", PARSE,HERE,CELLP,PACKS,EXITT);
   int NAMET=COLON("NAME>", COUNT,DOLIT,0x1F,ANDD,PLUS,ALIGN,EXITT);
-  HEADER("SAME?");
-  int SAMEQ=COLON_OLD(4,DOLIT,0x1F,ANDD,CELLD);
-  FOR(0);
-  AFT(14,OVER,RAT,CELLS,PLUS,AT,UPPER,OVER,RAT,CELLS,PLUS,AT,UPPER,SUBBB,QDUP);
-  IF(3,RFROM,DROP,EXITT);
-  THEN(0);
-  THEN(0);
-  NEXT(3,DOLIT,0,EXITT);
-  HEADER("find");
-  int FIND=COLON_OLD(10,SWAP,DUPP,AT,TEMP,STORE,DUPP,AT,TOR,CELLP,SWAP);
-  BEGIN(2,AT,DUPP);
-  IF(9,DUPP,AT,DOLIT,~0xC0,ANDD,UPPER,RAT,UPPER,XORR);
-  IF(3,CELLP,DOLIT,-1);
-  ELSE(4,CELLP,TEMP,AT,SAMEQ);
-  THEN(0);
-  ELSE(6,RFROM,DROP,SWAP,CELLM,SWAP,EXITT);
-  THEN(0);
-  WHILE(2,CELLM,CELLM);
-  REPEAT(9,RFROM,DROP,SWAP,DROP,CELLM,DUPP,NAMET,SWAP,EXITT);
+  int SAMEQ=COLON("SAME?", DOLIT,0x1F,ANDD,CELLD,FOR,AFT,
+                             OVER,RAT,CELLS,PLUS,AT,UPPER,OVER,RAT,
+                             CELLS,PLUS,AT,UPPER,SUBBB,QDUP,IF,
+                               RFROM,DROP,EXITT,THEN,
+                           THEN,NEXT,DOLIT,0,EXITT);
+  int FIND=COLON("find", SWAP,DUPP,AT,TEMP,STORE,DUPP,AT,TOR,CELLP,SWAP,
+                         BEGIN,AT,DUPP,IF,
+                           DUPP,AT,DOLIT,~0xC0,ANDD,UPPER,RAT,UPPER,XORR,
+                           IF,CELLP,DOLIT,-1,ELSE,CELLP,TEMP,AT,SAMEQ,THEN,
+                         ELSE,RFROM,DROP,SWAP,CELLM,SWAP,EXITT,THEN,
+                         WHILE,CELLM,CELLM,REPEAT,
+                         RFROM,DROP,SWAP,DROP,CELLM,DUPP,NAMET,SWAP,EXITT);
   int NAMEQ=COLON("NAME?", CNTXT,FIND,EXITT);
   int EXPEC=COLON("EXPECT", ACCEP,SPAN,STORE,DROP,EXITT);
   int QUERY=COLON("QUERY", TIB,DOLIT,0x100,ACCEP,NTIB,STORE,DROP,DOLIT,0,INN,STORE,EXITT);
   int ABORT=COLON("ABORT", NOP,TABRT,ATEXE,EXITT);
-  HEADER("abort\"");
-  ABORQP=COLON_OLD(0);
-  IF(4,DOSTR,COUNT,TYPES,ABORT);
-  THEN(3,DOSTR,DROP,EXITT);
-  HEADER("ERROR");
-  int ERRORR=COLON_OLD(8,SPACE,COUNT,TYPES,DOLIT,'?',EMIT,CR,ABORT);
-  HEADER("$INTERPRET");
-  int INTER=COLON_OLD(2,NAMEQ,QDUP);
-  IF(4,CAT,DOLIT,COMPO,ANDD);
-  ABORQ(" compile only");
-  int INTER0=LABEL(2,EXECU,EXITT);
-  THEN(1,NUMBQ);
-  IF(1,EXITT);
-  THEN(1,ERRORR);
+  ABORQP=COLON("abort\"", IF,DOSTR,COUNT,TYPES,ABORT,THEN,
+                          DOSTR,DROP,EXITT);
+  int ERRORR=COLON("ERROR", SPACE,COUNT,TYPES,DOLIT,'?',EMIT,CR,ABORT,EXITT);
+  int INTER=COLON("$INTERPRET", NAMEQ,QDUP,IF,CAT,DOLIT,COMPO,ANDD,
+                  ABORTQ," compile only",EXECU,EXITT,THEN,NUMBQ,IF,
+                  EXITT,THEN,ERRORR,EXITT);
   int LBRAC=COLON_IMMEDIATE("[", DOLIT,INTER,TEVAL,STORE,EXITT);
-  HEADER(".OK");
-  int DOTOK=COLON_OLD(6,CR,DOLIT,INTER,TEVAL,AT,EQUAL);
-  IF(14,TOR,TOR,TOR,DUPP,DOT,RFROM,DUPP,DOT,RFROM,DUPP,DOT,RFROM,DUPP,DOT);
-  DOTQ(" ok>");
-  THEN(1,EXITT);
-  HEADER("EVAL");
-  int EVAL=COLON_OLD(1,LBRAC);
-  BEGIN(3,TOKEN,DUPP,AT);
-  WHILE(2,TEVAL,ATEXE);
-  REPEAT(4,DROP,DOTOK,NOP,EXITT);
-  HEADER("QUIT");
-  int QUITT=COLON_OLD(1,LBRAC);
-  BEGIN(2,QUERY,EVAL);
-  AGAIN(0);
+  int DOTOK=COLON(".OK", CR,DOLIT,INTER,TEVAL,AT,EQUAL,IF,
+                    TOR,TOR,TOR,DUPP,DOT,RFROM,DUPP,DOT,RFROM,DUPP,DOT,
+                    RFROM,DUPP,DOT,DOTQ," ok>",THEN,EXITT);
+  int EVAL=COLON("EVAL", LBRAC,BEGIN,TOKEN,DUPP,AT,WHILE,TEVAL,ATEXE,
+                 REPEAT,DROP,DOTOK,NOP,EXITT);
+  int QUITT=COLON("QUIT", LBRAC,BEGIN,QUERY,EVAL,AGAIN,EXITT);
   int LOAD=COLON("LOAD", NTIB,STORE,TTIB,STORE,DOLIT,0,INN,STORE,EVAL,EXITT);
   int COMMA=COLON(",", HERE,DUPP,CELLP,CP,STORE,STORE,EXITT);
   int LITER=COLON_IMMEDIATE("LITERAL", DOLIT,DOLIT,COMMA,COMMA,EXITT);
   int ALLOT=COLON("ALLOT", ALIGN,CP,PSTOR,EXITT);
   int STRCQ=COLON("$,\"", DOLIT,'"',WORDD,COUNT,PLUS,ALIGN,CP,STORE,EXITT);
-  HEADER("?UNIQUE");
-  int UNIQU=COLON_OLD(3,DUPP,NAMEQ,QDUP);
-  IF(6,COUNT,DOLIT,0x1F,ANDD,SPACE,TYPES);
-  DOTQ(" reDef");
-  THEN(2,DROP,EXITT);
-  HEADER("$,n");
-  int SNAME=COLON_OLD(2,DUPP,AT);
-  IF(14,UNIQU,DUPP,NAMET,CP,STORE,DUPP,LAST,STORE,CELLM,CNTXT,AT,SWAP,STORE,EXITT);
-  THEN(1,ERRORR);
-  HEADER("'");
-  int TICK=COLON_OLD(2,TOKEN,NAMEQ);
-  IF(1,EXITT);
-  THEN(1,ERRORR);
+  int UNIQU=COLON("?UNIQUE", DUPP,NAMEQ,QDUP,IF,
+                   COUNT,DOLIT,0x1F,ANDD,SPACE,TYPES,DOTQ," reDef",
+                  THEN,DROP,EXITT);
+  int SNAME=COLON("$,n", DUPP,AT,IF,UNIQU,DUPP,NAMET,CP,STORE,DUPP,
+                  LAST,STORE,CELLM,CNTXT,AT,SWAP,STORE,EXITT,THEN,
+                  ERRORR,EXITT);
+  int TICK=COLON("'", TOKEN,NAMEQ,IF,EXITT,THEN,ERRORR,EXITT);
   int BCOMP=COLON_IMMEDIATE("[COMPILE]", TICK,COMMA,EXITT);
   int COMPI=COLON("COMPILE", RFROM,DUPP,AT,COMMA,CELLP,TOR,EXITT);
-  HEADER("$COMPILE");
-  int SCOMP=COLON_OLD(2,NAMEQ,QDUP);
-  IF(4,AT,DOLIT,IMEDD,ANDD);
-  IF(1,EXECU);
-  ELSE(1,COMMA);
-  THEN(1,EXITT);
-  THEN(1,NUMBQ);
-  IF(2,LITER,EXITT);
-  THEN(1,ERRORR);
+  int SCOMP=COLON("$COMPILE", NAMEQ,QDUP,IF,AT,DOLIT,IMEDD,ANDD,IF,EXECU,
+                  ELSE,COMMA,THEN,EXITT,THEN,NUMBQ,IF,LITER,EXITT,THEN,
+                  ERRORR,EXITT);
   int OVERT=COLON("OVERT", LAST,AT,CNTXT,STORE,EXITT);
   int RBRAC=COLON("]", DOLIT,SCOMP,TEVAL,STORE,EXITT);
   int COLN=COLON(":", TOKEN,SNAME,RBRAC,DOLIT,as_dolist,COMMA,EXITT);
-  HEADER_IMMEDIATE(";");
-  int SEMIS=COLON_OLD(6, DOLIT,EXITT,COMMA,LBRAC,OVERT,EXITT);
-  HEADER("dm+");
-  int DMP=COLON_OLD(4,OVER,DOLIT,6,UDOTR);
-  FOR(0);
-  AFT(6,DUPP,AT,DOLIT,9,UDOTR,CELLP);
-  THEN(0);
-  NEXT(1,EXITT);
-  HEADER("DUMP");
-  int DUMP=COLON_OLD(10,BASE,AT,TOR,HEXX,DOLIT,0x1F,PLUS,DOLIT,0x20,SLASH);
-  FOR(0);
-  AFT(10,CR,DOLIT,8,DDUP,DMP,TOR,SPACE,CELLS,TYPES,RFROM);
-  THEN(0);
-  NEXT(5,DROP,RFROM,BASE,STORE,EXITT);
-  HEADER(">NAME");
-  int TNAME=COLON_OLD(1,CNTXT);
-  BEGIN(2,AT,DUPP);
-  WHILE(3,DDUP,NAMET,XORR);
-  IF(1,ONEM);
-  ELSE(3,SWAP,DROP,EXITT);
-  THEN(0);
-  REPEAT(3,SWAP,DROP,EXITT);
+  int SEMIS=COLON_IMMEDIATE(";", DOLIT,EXITT,COMMA,LBRAC,OVERT,EXITT);
+  int DMP=COLON("dm+", OVER,DOLIT,6,UDOTR,FOR,AFT,DUPP,AT,DOLIT,9,UDOTR,CELLP,
+    THEN,NEXT,EXITT);
+  int DUMP=COLON("DUMP", BASE,AT,TOR,HEXX,DOLIT,0x1F,PLUS,DOLIT,0x20,SLASH,
+    FOR,AFT,CR,DOLIT,8,DDUP,DMP,TOR,SPACE,CELLS,TYPES,RFROM,THEN,NEXT,
+    DROP,RFROM,BASE,STORE,EXITT);
+  int TNAME=COLON(">NAME", CNTXT,BEGIN,AT,DUPP,WHILE,DDUP,NAMET,XORR,
+    IF,ONEM,ELSE,SWAP,DROP,EXITT,THEN,REPEAT,SWAP,DROP,EXITT);
   int DOTID=COLON(".ID", COUNT,DOLIT,0x1F,ANDD,TYPES,SPACE,EXITT);
-  HEADER("WORDS");
-  int WORDS=COLON_OLD(6,CR,CNTXT,DOLIT,0,TEMP,STORE);
-  BEGIN(2,AT,QDUP);
-  WHILE(9,DUPP,SPACE,DOTID,CELLM,TEMP,AT,DOLIT,0x10,LESS);
-  IF(4,DOLIT,1,TEMP,PSTOR);
-  ELSE(5,CR,DOLIT,0,TEMP,STORE);
-  THEN(0);
-  REPEAT(1,EXITT);
-  HEADER("FORGET");
-  int FORGT=COLON_OLD(3,TOKEN,NAMEQ,QDUP);
-  IF(12,CELLM,DUPP,CP,STORE,AT,DUPP,CNTXT,STORE,LAST,STORE,DROP,EXITT);
-  THEN(1,ERRORR);
-  HEADER("COLD");
-  int COLD=COLON_OLD(1,CR);
-  DOTQ("esp32forth V6.3, 2019 ");
-  int DOTQ1=LABEL(2,CR,EXITT);
-  HEADER("LINE");
-  int LINE=COLON_OLD(2,DOLIT,0x7);
-  FOR(6,DUPP,PEEK,DOLIT,0x9,UDOTR,CELLP);
-  NEXT(1,EXITT);
-  HEADER("PP");
-  int PP=COLON_OLD(0);
-  FOR(0);
-  AFT(7,CR,DUPP,DOLIT,0x9,UDOTR,SPACE,LINE);
-  THEN(0);
-  NEXT(1,EXITT);
+  int WORDS=COLON("WORDS", CR,CNTXT,DOLIT,0,TEMP,STORE,BEGIN,AT,QDUP,
+    WHILE,DUPP,SPACE,DOTID,CELLM,TEMP,AT,DOLIT,0x10,LESS,
+    IF,DOLIT,1,TEMP,PSTOR,ELSE,CR,DOLIT,0,TEMP,STORE,THEN,
+    REPEAT,EXITT);
+  int FORGT=COLON("FORGET", TOKEN,NAMEQ,QDUP,IF,
+    CELLM,DUPP,CP,STORE,AT,DUPP,CNTXT,STORE,LAST,STORE,DROP,EXITT,THEN,
+    ERRORR,EXITT);
+  int COLD=COLON("COLD",CR,DOTQ,"esp32forth V6.3, 2019 ",CR,EXITT);
+  int LINE=COLON("LINE",
+    DOLIT,0x7,FOR,DUPP,PEEK,DOLIT,0x9,UDOTR,CELLP,NEXT,EXITT);
+  int PP=COLON("PP",
+    FOR,AFT,CR,DUPP,DOLIT,0x9,UDOTR,SPACE,LINE,THEN,NEXT,EXITT);
   int P0=COLON("P0", DOLIT,0x3FF44004,POKE,EXITT);
   int P0S=COLON("P0S", DOLIT,0x3FF44008,POKE,EXITT);
   int P0C=COLON("P0C", DOLIT,0x3FF4400C,POKE,EXITT);
@@ -1526,20 +1090,12 @@ int main(void) {
   int P0IN=COLON("P0IN", DOLIT,0x3FF4403C,PEEK,DOT,EXITT);
   int P1IN=COLON("P1IN", DOLIT,0x3FF44040,PEEK,DOT,EXITT);
   int PPP=COLON("PPP", DOLIT,0x3FF44000,DOLIT,3,PP,DROP,EXITT);
-  HEADER("EMITT");
-  int EMITT=COLON_OLD(2,DOLIT,0x3);
-  FOR(8,DOLIT,0,DOLIT,0x100,MSMOD,SWAP,TCHAR,EMIT);
-  NEXT(2,DROP,EXITT);
-  HEADER("TYPEE");
-  int TYPEE=COLON_OLD(3,SPACE,DOLIT,0x7);
-  FOR(4,DUPP,PEEK,EMITT,CELLP);
-  NEXT(2,DROP,EXITT);
-  HEADER("PPPP");
-  int PPPP=COLON_OLD(0);
-  FOR(0);
-  AFT(10,CR,DUPP,DUPP,DOLIT,0x9,UDOTR,SPACE,LINE,SWAP,TYPEE);
-  THEN(0);
-  NEXT(1,EXITT);
+  int EMITT=COLON("EMITT", DOLIT,0x3,FOR,DOLIT,0,DOLIT,0x100,MSMOD,SWAP,
+    TCHAR,EMIT,NEXT,DROP,EXITT);
+  int TYPEE=COLON("TYPEE", SPACE,DOLIT,0x7,FOR,DUPP,PEEK,EMITT,CELLP,NEXT,
+    DROP,EXITT);
+  int PPPP=COLON("PPPP", FOR,AFT,CR,DUPP,DUPP,DOLIT,0x9,UDOTR,SPACE,LINE,
+    SWAP,TYPEE,THEN,NEXT,EXITT);
   int KKK=COLON("KKK", DOLIT,0x3FF59000,DOLIT,0x10,PP,DROP,EXITT);
   int THENN=COLON_IMMEDIATE("THEN", HERE,SWAP,STORE,EXITT);
   int FORR=COLON_IMMEDIATE("FOR", COMPI,TOR,HERE,EXITT);
