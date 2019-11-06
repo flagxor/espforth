@@ -267,61 +267,63 @@ static void mspause(cell_t ms) {
 }
 
 #define PRIMITIVE_LIST \
-  X(nop, next()) \
-  X(accept, len = duplexread(cData, top); top = len) \
-  X(qrx, push fgetc(stdin); push -1) \
-  X(txsto, char c=top; fputc(c, stdout); pop) \
-  X(docon, push data[WP/sizeof(cell_t)]) \
-  X(dolit, push data[IP/sizeof(cell_t)]; IP += sizeof(cell_t); next()) \
-  X(dolist, rack[(unsigned char)++R] = IP; IP = WP; next()) \
-  X(exit, IP = (cell_t) rack[(unsigned char)R--]; next()) \
-  X(execu, P = top; WP = P + sizeof(cell_t); pop) \
-  X(donext, if(rack[(unsigned char)R]) \
+  X("NOP", nop, next()) \
+  X("ACCEPT", accept, len = duplexread(cData, top); top = len) \
+  X("?KEY", qrx, push fgetc(stdin); push -1) \
+  X("EMIT", txsto, char c=top; fputc(c, stdout); pop) \
+  X("DOCON", docon, push data[WP/sizeof(cell_t)]) \
+  X("DOLIT", dolit, push data[IP/sizeof(cell_t)]; \
+    IP += sizeof(cell_t); next()) \
+  X("DOLIST", dolist, rack[(unsigned char)++R] = IP; IP = WP; next()) \
+  X("EXIT", exit, IP = (cell_t) rack[(unsigned char)R--]; next()) \
+  X("EXECUTE", execute, P = top; WP = P + sizeof(cell_t); pop) \
+  X("DONEXT", donext, if(rack[(unsigned char)R]) \
     (rack[(unsigned char)R] -= 1, IP = data[IP/sizeof(cell_t)]); \
     else (IP += sizeof(cell_t), R--); next()) \
-  X(qbran, if(top == 0) IP = data[IP/sizeof(cell_t)]; \
+  X("QBRANCH", qbranch, if(top == 0) IP = data[IP/sizeof(cell_t)]; \
     else IP += sizeof(cell_t); pop; next()) \
-  X(bran, IP = data[IP/sizeof(cell_t)]; next()) \
-  X(store, data[top/sizeof(cell_t)] = stack[(unsigned char)S--]; pop) \
-  X(at, top = data[top/sizeof(cell_t)]) \
-  X(cstor, cData[top] = (unsigned char) stack[(unsigned char)S--]; pop) \
-  X(cat, top = (cell_t) cData[top]) \
-  X(rpat, ) \
-  X(rpsto, ) \
-  X(rfrom, push rack[(unsigned char)R--]) \
-  X(rat, push rack[(unsigned char)R]) \
-  X(tor, rack[(unsigned char)++R] = top; pop) \
-  X(spat, ) \
-  X(spsto, ) \
-  X(drop, pop) \
-  X(dup, stack[(unsigned char)++S] = top) \
-  X(swap, WP = top; top = stack[(unsigned char)S]; \
+  X("BRANCH", branch, IP = data[IP/sizeof(cell_t)]; next()) \
+  X("!", store, data[top/sizeof(cell_t)] = stack[(unsigned char)S--]; pop) \
+  X("@", at, top = data[top/sizeof(cell_t)]) \
+  X("C!", cstor, cData[top] = (unsigned char) stack[(unsigned char)S--]; pop) \
+  X("C@", cat, top = (cell_t) cData[top]) \
+  X("RPAT", rpat, ) \
+  X("RPSTO", rpsto, ) \
+  X("R>", rfrom, push rack[(unsigned char)R--]) \
+  X("R@", rat, push rack[(unsigned char)R]) \
+  X(">R", tor, rack[(unsigned char)++R] = top; pop) \
+  X("SPAT", spat, ) \
+  X("SPSTO", spsto, ) \
+  X("DROP", drop, pop) \
+  X("DUP", dup, stack[(unsigned char)++S] = top) \
+  X("SWAP", swap, WP = top; top = stack[(unsigned char)S]; \
     stack[(unsigned char)S] = WP) \
-  X(over, push stack[(unsigned char)(S-1)] ) \
-  X(zless, top = (top < 0) LOGICAL) \
-  X(andd, top &= stack[(unsigned char)S--]) \
-  X(orr, top |= stack[(unsigned char)S--]) \
-  X(xorr, top ^= stack[(unsigned char)S--]) \
-  X(uplus, stack[(unsigned char)S] += top; \
+  X("OVER", over, push stack[(unsigned char)(S-1)] ) \
+  X("0<", zless, top = (top < 0) LOGICAL) \
+  X("AND", and, top &= stack[(unsigned char)S--]) \
+  X("OR", or, top |= stack[(unsigned char)S--]) \
+  X("XOR", xor, top ^= stack[(unsigned char)S--]) \
+  X("U+", uplus, stack[(unsigned char)S] += top; \
     top = LOWER(stack[(unsigned char)S], top)) \
-  X(next, next()) \
-  X(qdup, if(top) stack[(unsigned char)++S] = top) \
-  X(rot, WP = stack[(unsigned char)(S-1)]; \
+  X("NEXT", next, next()) \
+  X("?DUP", qdup, if(top) stack[(unsigned char)++S] = top) \
+  X("ROT", rot, WP = stack[(unsigned char)(S-1)]; \
     stack[(unsigned char)(S-1)] = stack[(unsigned char)S]; \
     stack[(unsigned char)S] = top; top = WP) \
-  X(ddrop, fun_drop(); fun_drop()) \
-  X(ddup, fun_over(); fun_over()) \
-  X(plus, top += stack[(unsigned char)S--]) \
-  X(inver, top = -top-1) \
-  X(negat, top = 0 - top) \
-  X(dnega, fun_inver(); fun_tor(); fun_inver(); push 1; fun_uplus(); \
+  X("2DROP", ddrop, fun_drop(); fun_drop()) \
+  X("2DUP", ddup, fun_over(); fun_over()) \
+  X("+", plus, top += stack[(unsigned char)S--]) \
+  X("INVERSE", inverse, top = -top-1) \
+  X("NEGATE", negate, top = 0 - top) \
+  X("DNEGATE", dnegate, fun_inverse(); \
+    fun_tor(); fun_inverse(); push 1; fun_uplus(); \
     fun_rfrom(); fun_plus()) \
-  X(subb, top = stack[(unsigned char)S--] - top) \
-  X(abss, if(top < 0) top = -top) \
-  X(equal, top = (stack[(unsigned char)S--] == top) LOGICAL) \
-  X(uless, top = LOWER(stack[(unsigned char)S], top) LOGICAL; S--) \
-  X(less, top = (stack[(unsigned char)S--] < top) LOGICAL) \
-  X(ummod, d = (udcell_t)((ucell_t)top); \
+  X("-", sub, top = stack[(unsigned char)S--] - top) \
+  X("ABS", abs, if(top < 0) top = -top) \
+  X("=", equal, top = (stack[(unsigned char)S--] == top) LOGICAL) \
+  X("U<", uless, top = LOWER(stack[(unsigned char)S], top) LOGICAL; S--) \
+  X("<", less, top = (stack[(unsigned char)S--] < top) LOGICAL) \
+  X("UM/MOD", ummod, d = (udcell_t)((ucell_t)top); \
     m = (udcell_t)((ucell_t)stack[(unsigned char) S]); \
     n = (udcell_t)((ucell_t)stack[(unsigned char) (S - 1)]); \
     n += m << CELL_BITS; \
@@ -329,7 +331,7 @@ static void mspause(cell_t ms) {
     if (d == 0) (top = 0, stack[S] = 0); \
     else (top = (ucell_t)(n / d), \
     stack[(unsigned char) S] = (ucell_t)(n%d))) \
-  X(msmod, d = (dcell_t)((cell_t)top); \
+  X("M/MOD", msmod, d = (dcell_t)((cell_t)top); \
     m = (dcell_t)((cell_t)stack[(unsigned char) S]); \
     n = (dcell_t)((cell_t)stack[(unsigned char) S - 1]); \
     n += m << CELL_BITS; \
@@ -337,70 +339,72 @@ static void mspause(cell_t ms) {
     if (d == 0) (top = 0, stack[S] = 0); \
     else (top = (cell_t)(n / d), \
     stack[(unsigned char) S] = (cell_t)(n%d))) \
-  X(slmod, if (top != 0) \
+  X("/MOD", slmod, if (top != 0) \
     (WP = stack[(unsigned char) S] / top, \
     stack[(unsigned char) S] %= top, \
     top = WP)) \
-  X(mod, top = (top) ? stack[(unsigned char) S--] % top \
+  X("MOD", mod, top = (top) ? stack[(unsigned char) S--] % top \
     : stack[(unsigned char) S--]) \
-  X(slash, top = (top) ? stack[(unsigned char) S--] / top : (S--, 0)) \
-  X(umsta, d = (udcell_t)top; \
+  X("/", slash, top = (top) ? stack[(unsigned char) S--] / top : (S--, 0)) \
+  X("UM*", umsta, d = (udcell_t)top; \
     m = (udcell_t)stack[(unsigned char) S]; \
     m *= d; \
     top = (ucell_t)(m >> CELL_BITS); \
     stack[(unsigned char) S] = (ucell_t)m) \
-  X(star, top *= stack[(unsigned char) S--]) \
-  X(mstar, d = (dcell_t)top; \
+  X("*", star, top *= stack[(unsigned char) S--]) \
+  X("M*", mstar, d = (dcell_t)top; \
     m = (dcell_t)stack[(unsigned char) S]; \
     m *= d; \
     top = (cell_t)(m >> CELL_BITS); \
     stack[(unsigned char) S] = (cell_t)m) \
-  X(ssmod, d = (dcell_t)top; \
+  X("*/MOD", ssmod, d = (dcell_t)top; \
     m = (dcell_t)stack[(unsigned char) S]; \
     n = (dcell_t)stack[(unsigned char) (S - 1)]; \
     n *= m; \
     pop; \
     top = (cell_t)(n / d); \
     stack[(unsigned char) S] = (cell_t)(n%d)) \
-  X(stasl, d = (dcell_t)top; \
+  X("*/", stasl, d = (dcell_t)top; \
     m = (dcell_t)stack[(unsigned char) S]; \
     n = (dcell_t)stack[(unsigned char) (S - 1)]; \
     n *= m; \
     pop; pop; \
     top = (cell_t)(n / d)) \
-  X(pick, top = stack[(unsigned char)(S-top)]) \
-  X(pstor, data[top/sizeof(cell_t)] += stack[(unsigned char)S--]; pop) \
-  X(dstor, data[(top/sizeof(cell_t))+1] = stack[(unsigned char)S--]; \
+  X("PICK", pick, top = stack[(unsigned char)(S-top)]) \
+  X("+!", pstor, data[top/sizeof(cell_t)] += stack[(unsigned char)S--]; pop) \
+  X("2!", dstor, data[(top/sizeof(cell_t))+1] = stack[(unsigned char)S--]; \
     data[top/sizeof(cell_t)] = stack[(unsigned char)S--]; pop) \
-  X(dat, push data[top/sizeof(cell_t)]; top = data[(top/sizeof(cell_t))+1]) \
-  X(count, stack[(unsigned char)++S] = top + 1; top = cData[top]) \
-  X(dovar, push WP) \
-  X(max, if (top < stack[(unsigned char)S]) pop; else S--) \
-  X(min, if (top < stack[(unsigned char)S]) S--; else pop) \
-  X(tone, WP=top; pop; /* ledcWriteTone(WP,top); */ pop) \
-  X(sendPacket, ) \
-  X(poke, Pointer = (cell_t*)top; *Pointer = stack[(unsigned char)S--]; pop) \
-  X(peek, Pointer = (cell_t*)top; top = *Pointer) \
-  X(adc, /* top= (cell_t) analogRead(top); */ top = (cell_t) 0) \
-  X(pin, WP = top; pop; setpin(WP, top); pop) \
-  X(duty, WP = top; pop; /* ledcAnalogWrite(WP,top,255); */ pop) \
-  X(freq, WP = top; pop; /* ledcSetup(WP,top,13); */ pop) \
-  X(ms, WP = top; pop; mspause(WP)) \
-  X(terminate, exit(top))
+  X("2@", dat, push data[top/sizeof(cell_t)]; \
+    top = data[(top/sizeof(cell_t))+1]) \
+  X("COUNT", count, stack[(unsigned char)++S] = top + 1; top = cData[top]) \
+  X("DOVAR", dovar, push WP) \
+  X("MAX", max, if (top < stack[(unsigned char)S]) pop; else S--) \
+  X("MIN", min, if (top < stack[(unsigned char)S]) S--; else pop) \
+  X("TONE", tone, WP=top; pop; /* ledcWriteTone(WP,top); */ pop) \
+  X("sendPacket", sendPacket, ) \
+  X("POKE", poke, Pointer = (cell_t*)top; \
+    *Pointer = stack[(unsigned char)S--]; pop) \
+  X("PEEK", peek, Pointer = (cell_t*)top; top = *Pointer) \
+  X("ADC", adc, /* top= (cell_t) analogRead(top); */ top = (cell_t) 0) \
+  X("PIN", pin, WP = top; pop; setpin(WP, top); pop) \
+  X("DUTY", duty, WP = top; pop; /* ledcAnalogWrite(WP,top,255); */ pop) \
+  X("FREQ", freq, WP = top; pop; /* ledcSetup(WP,top,13); */ pop) \
+  X("MS", ms, WP = top; pop; mspause(WP)) \
+  X("TERMINATE", terminate, exit(top))
 
-#define X(name, code) static void fun_ ## name(void) { code; }
+#define X(sname, name, code) static void fun_ ## name(void) { code; }
   PRIMITIVE_LIST
 #undef X
 
 static void (*primitives[])(void) = {
-#define X(name, code) fun_ ## name,
+#define X(sname, name, code) fun_ ## name,
   PRIMITIVE_LIST
 #undef X
 };
 
 enum {
   as_unknown = -1,
-#define X(name, code) as_ ## name,
+#define X(sname, name, code) as_ ## name,
   PRIMITIVE_LIST
 #undef X
 };
@@ -548,10 +552,10 @@ int main(void) {
   DOLIT=CODE("DOLIT", as_dolit, as_next);
   int DOLST=CODE("DOLIST", as_dolist, as_next);
   EXITT=CODE("EXIT", as_exit, as_next);
-  int EXECU=CODE("EXECUTE", as_execu, as_next);
+  int EXECU=CODE("EXECUTE", as_execute, as_next);
   DONXT=CODE("DONEXT", as_donext, as_next);
-  QBRAN=CODE("QBRANCH", as_qbran, as_next);
-  BRAN=CODE("BRANCH", as_bran, as_next);
+  QBRAN=CODE("QBRANCH", as_qbranch, as_next);
+  BRAN=CODE("BRANCH", as_branch, as_next);
   int STORE=CODE("!", as_store, as_next);
   int AT=CODE("@", as_at, as_next);
   int CSTOR=CODE("C!", as_cstor, as_next);
@@ -564,20 +568,20 @@ int main(void) {
   int SWAP=CODE("SWAP", as_swap, as_next);
   int OVER=CODE("OVER", as_over, as_next);
   int ZLESS=CODE("0<", as_zless, as_next);
-  int ANDD=CODE("AND", as_andd, as_next);
-  int ORR=CODE("OR", as_orr, as_next);
-  int XORR=CODE("XOR", as_xorr, as_next);
+  int ANDD=CODE("AND", as_and, as_next);
+  int ORR=CODE("OR", as_or, as_next);
+  int XORR=CODE("XOR", as_xor, as_next);
   int UPLUS=CODE("UM+", as_uplus, as_next);
   int QDUP=CODE("?DUP", as_qdup, as_next);
   int ROT=CODE("ROT", as_rot, as_next);
   int DDROP=CODE("2DROP", as_ddrop, as_next);
   int DDUP=CODE("2DUP", as_ddup, as_next);
   int PLUS=CODE("+", as_plus, as_next);
-  int INVER=CODE("NOT", as_inver, as_next);
-  int NEGAT=CODE("NEGATE", as_negat, as_next);
-  int DNEGA=CODE("DNEGATE", as_dnega, as_next);
-  int SUBBB=CODE("-", as_subb, as_next);
-  int ABSS=CODE("ABS", as_abss, as_next);
+  int INVER=CODE("NOT", as_inverse, as_next);
+  int NEGAT=CODE("NEGATE", as_negate, as_next);
+  int DNEGA=CODE("DNEGATE", as_dnegate, as_next);
+  int SUBBB=CODE("-", as_sub, as_next);
+  int ABSS=CODE("ABS", as_abs, as_next);
   int EQUAL=CODE("=", as_equal, as_next);
   int ULESS=CODE("U<", as_uless, as_next);
   int LESS=CODE("<", as_less, as_next);
@@ -598,18 +602,6 @@ int main(void) {
   int COUNT=CODE("COUNT", as_count, as_next);
   int MAX=CODE("MAX", as_max, as_next);
   int MIN=CODE("MIN", as_min, as_next);
-  int BLANK=CONSTANT("BL", 32);
-  int CELL=CONSTANT("CELL", sizeof(cell_t));
-  int CELLP=CODE("CELL+", as_docon, as_plus, as_next); Comma(sizeof(cell_t));
-  int CELLM=CODE("CELL-", as_docon, as_subb, as_next); Comma(sizeof(cell_t));
-  int CELLS=CODE("CELLS", as_docon, as_star, as_next); Comma(sizeof(cell_t));
-  int CELLD=CODE("CELL/", as_docon, as_slash, as_next); Comma(sizeof(cell_t));
-  int ONEP=CODE("1+", as_docon, as_plus, as_next); Comma(1);
-  int ONEM=CODE("1-", as_docon, as_subb, as_next); Comma(1);
-  int TWOP=CODE("2+", as_docon, as_plus, as_next); Comma(2);
-  int TWOM=CODE("2-", as_docon, as_subb, as_next); Comma(2);
-  int TWOST=CODE("2*", as_docon, as_star, as_next); Comma(2);
-  int TWOS=CODE("2/", as_docon, as_slash, as_next); Comma(2);
   int SENDP=CODE("sendPacket", as_sendPacket, as_next);
   int POKE=CODE("POKE", as_poke, as_next);
   int PEEK=CODE("PEEK", as_peek, as_next);
@@ -620,6 +612,19 @@ int main(void) {
   int FREQ=CODE("FREQ", as_freq, as_next);
   int MS=CODE("MS", as_ms, as_next);
   int TERMINATE=CODE("TERMINATE", as_terminate, as_next);
+
+  int BLANK=CONSTANT("BL", 32);
+  int CELL=CONSTANT("CELL", sizeof(cell_t));
+  int CELLP=CODE("CELL+", as_docon, as_plus, as_next); Comma(sizeof(cell_t));
+  int CELLM=CODE("CELL-", as_docon, as_sub, as_next); Comma(sizeof(cell_t));
+  int CELLS=CODE("CELLS", as_docon, as_star, as_next); Comma(sizeof(cell_t));
+  int CELLD=CODE("CELL/", as_docon, as_slash, as_next); Comma(sizeof(cell_t));
+  int ONEP=CODE("1+", as_docon, as_plus, as_next); Comma(1);
+  int ONEM=CODE("1-", as_docon, as_sub, as_next); Comma(1);
+  int TWOP=CODE("2+", as_docon, as_plus, as_next); Comma(2);
+  int TWOM=CODE("2-", as_docon, as_sub, as_next); Comma(2);
+  int TWOST=CODE("2*", as_docon, as_star, as_next); Comma(2);
+  int TWOS=CODE("2/", as_docon, as_slash, as_next); Comma(2);
 
   int BYE=COLON("BYE", DOLIT, 0, TERMINATE, EXITT);
   int KEY=COLON("KEY", BEGIN, QKEY, UNTIL, EXITT);
