@@ -149,7 +149,7 @@ static void Comma(cell_t n) {
   IP=P*sizeof(cell_t);
 }
 
-int LABEL(int len, ... ) {
+static int LABEL(int len, ... ) {
   int addr=IP;
   P=IP/sizeof(cell_t);
   va_list argList;
@@ -205,7 +205,7 @@ MACRO_LIST
 #undef X
 };
 
-void CheckSum() {
+static void CheckSum() {
   int i;
   unsigned char sum=0;
   printf("\n");
@@ -216,14 +216,16 @@ void CheckSum() {
   }
   printf(" %02x",sum);
 }
+
 /******************************************************************************/
 /* PRIMITIVES                                                                 */
 /******************************************************************************/
 
-void next(void)
-{ P = data[IP/sizeof(cell_t)];
+static void next(void) {
+  P = data[IP/sizeof(cell_t)];
   IP += sizeof(cell_t);
-  WP = P+sizeof(cell_t);  }
+  WP = P+sizeof(cell_t);
+}
 
 static int duplexread(unsigned char* dst, int sz) {
   int len = 0;
@@ -250,291 +252,6 @@ static int duplexread(unsigned char* dst, int sz) {
   return len;
 }
 
-void accep()
-/* WiFiClient */
-{
-  len = duplexread(cData, top);
-  top = len;
-}
-void qrx(void)
-  { push fgetc(stdin);
-    push -1; }
-
-void txsto(void)
-{  char c=top;
-   fputc(c, stdout);
-   pop;
-}
-
-void docon(void)
-{  push data[WP/sizeof(cell_t)]; }
-
-void dolit(void)
-{   push data[IP/sizeof(cell_t)];
-  IP += sizeof(cell_t);
-  next(); }
-
-void dolist(void)
-{   rack[(unsigned char)++R] = IP;
-  IP = WP;
-  next(); }
-
-void exitt(void)
-{   IP = (cell_t) rack[(unsigned char)R--];
-  next(); }
-
-void execu(void)
-{  P = top;
-  WP = P + sizeof(cell_t);
-  pop; }
-
-void donext(void)
-{   if(rack[(unsigned char)R]) {
-    rack[(unsigned char)R] -= 1 ;
-    IP = data[IP/sizeof(cell_t)];
-  } else { IP += sizeof(cell_t);  R-- ;  }
-  next(); }
-
-void qbran(void)
-{   if(top == 0) IP = data[IP/sizeof(cell_t)];
-  else IP += sizeof(cell_t);  pop;
-  next(); }
-
-void bran(void)
-{   IP = data[IP/sizeof(cell_t)];
-  next(); }
-
-void store(void)
-{   data[top/sizeof(cell_t)] = stack[(unsigned char)S--];
-  pop;  }
-
-void at(void)
-{   top = data[top/sizeof(cell_t)];  }
-
-void cstor(void)
-{   cData[top] = (unsigned char) stack[(unsigned char)S--];
-  pop;  }
-
-void cat(void)
-{   top = (cell_t) cData[top];  }
-
-void rpat(void) {}
-void rpsto(void) {}
-
-void rfrom(void)
-{   push rack[(unsigned char)R--];  }
-
-void rat(void)
-{   push rack[(unsigned char)R];  }
-
-void tor(void)
-{   rack[(unsigned char)++R] = top;  pop;  }
-
-void spat(void) {}
-void spsto(void) {}
-
-void drop(void)
-{   pop;  }
-
-void dup_(void)
-{   stack[(unsigned char)++S] = top;  }
-
-void swap(void)
-{   WP = top;
-  top = stack[(unsigned char)S];
-  stack[(unsigned char)S] = WP;  }
-
-void over(void)
-{  push stack[(unsigned char)(S-1)];  }
-
-void zless(void)
-{   top = (top < 0) LOGICAL;  }
-
-void andd(void)
-{   top &= stack[(unsigned char)S--];  }
-
-void orr(void)
-{   top |= stack[(unsigned char)S--];  }
-
-void xorr(void)
-{   top ^= stack[(unsigned char)S--];  }
-
-void uplus(void)
-{   stack[(unsigned char)S] += top;
-  top = LOWER(stack[(unsigned char)S], top);  }
-
-void nop(void)
-{   next(); }
-
-void qdup(void)
-{   if(top) stack[(unsigned char)++S] = top ;  }
-
-void rot(void)
-{   WP = stack[(unsigned char)(S-1)];
-  stack[(unsigned char)(S-1)] = stack[(unsigned char)S];
-  stack[(unsigned char)S] = top;
-  top = WP;  }
-
-void ddrop(void)
-{   drop(); drop();  }
-
-void ddup(void)
-{   over(); over();  }
-
-void plus(void)
-{   top += stack[(unsigned char)S--];  }
-
-void inver(void)
-{   top = -top-1;  }
-
-void negat(void)
-{   top = 0 - top;  }
-
-void dnega(void)
-{   inver();
-  tor();
-  inver();
-  push 1;
-  uplus();
-  rfrom();
-  plus(); }
-
-void subb(void)
-{   top = stack[(unsigned char)S--] - top;  }
-
-void abss(void)
-{   if(top < 0)
-    top = -top;  }
-
-void great(void)
-{   top = (stack[(unsigned char)S--] > top) LOGICAL;  }
-
-void less(void)
-{   top = (stack[(unsigned char)S--] < top) LOGICAL;  }
-
-void equal(void)
-{   top = (stack[(unsigned char)S--] == top) LOGICAL;  }
-
-void uless(void)
-{   top = LOWER(stack[(unsigned char)S], top) LOGICAL; S--;  }
-
-void ummod(void)
-{  d = (udcell_t)((ucell_t)top);
-  m = (udcell_t)((ucell_t)stack[(unsigned char) S]);
-  n = (udcell_t)((ucell_t)stack[(unsigned char) (S - 1)]);
-  n += m << CELL_BITS;
-  pop;
-  if (d == 0) {
-    top = 0;
-    stack[S] = 0;
-    return;
-  }
-  top = (ucell_t)(n / d);
-  stack[(unsigned char) S] = (ucell_t)(n%d); }
-void msmod(void)
-{ d = (dcell_t)((cell_t)top);
-  m = (dcell_t)((cell_t)stack[(unsigned char) S]);
-  n = (dcell_t)((cell_t)stack[(unsigned char) S - 1]);
-  n += m << CELL_BITS;
-  pop;
-  if (d == 0) {
-    top = 0;
-    stack[S] = 0;
-    return;
-  }
-  top = (cell_t)(n / d);
-  stack[(unsigned char) S] = (cell_t)(n%d); }
-void slmod(void)
-{ if (top != 0) {
-    WP = stack[(unsigned char) S] / top;
-    stack[(unsigned char) S] %= top;
-    top = WP;
-  } }
-void mod(void)
-{ top = (top) ? stack[(unsigned char) S--] % top : stack[(unsigned char) S--]; }
-void slash(void)
-{ top = (top) ? stack[(unsigned char) S--] / top : (S--, 0); }
-void umsta(void)
-{ d = (udcell_t)top;
-  m = (udcell_t)stack[(unsigned char) S];
-  m *= d;
-  top = (ucell_t)(m >> CELL_BITS);
-  stack[(unsigned char) S] = (ucell_t)m; }
-void star(void)
-{ top *= stack[(unsigned char) S--]; }
-void mstar(void)
-{ d = (dcell_t)top;
-  m = (dcell_t)stack[(unsigned char) S];
-  m *= d;
-  top = (cell_t)(m >> CELL_BITS);
-  stack[(unsigned char) S] = (cell_t)m; }
-void ssmod(void)
-{ d = (dcell_t)top;
-  m = (dcell_t)stack[(unsigned char) S];
-  n = (dcell_t)stack[(unsigned char) (S - 1)];
-  n *= m;
-  pop;
-  top = (cell_t)(n / d);
-  stack[(unsigned char) S] = (cell_t)(n%d); }
-void stasl(void)
-{ d = (dcell_t)top;
-  m = (dcell_t)stack[(unsigned char) S];
-  n = (dcell_t)stack[(unsigned char) (S - 1)];
-  n *= m;
-  pop; pop;
-  top = (cell_t)(n / d); }
-
-void pick(void)
-{   top = stack[(unsigned char)(S-top)];  }
-
-void pstor(void)
-{   data[top/sizeof(cell_t)] += stack[(unsigned char)S--], pop;  }
-
-void dstor(void)
-{   data[(top/sizeof(cell_t))+1] = stack[(unsigned char)S--];
-  data[top/sizeof(cell_t)] = stack[(unsigned char)S--];
-  pop;  }
-
-void dat(void)
-{   push data[top/sizeof(cell_t)];
-  top = data[(top/sizeof(cell_t))+1];  }
-
-void count(void)
-{   stack[(unsigned char)++S] = top + 1;
-  top = cData[top]; }
-
-void dovar(void)
-{   push WP; }
-
-void maxx(void)
-{   if (top < stack[(unsigned char)S]) pop;
-  else S--; }
-
-void minn(void)
-{   if (top < stack[(unsigned char)S]) S--;
-  else pop; }
-
-void audio(void)
-{  WP=top; pop;
-   // ledcWriteTone(WP,top);
-   pop;
-}
-
-void sendPacket(void)
-{}
-
-void poke(void)
-{   Pointer = (cell_t*)top; *Pointer = stack[(unsigned char)S--];
-    pop;  }
-
-void peeek(void)
-{   Pointer = (cell_t*)top; top = *Pointer;  }
-
-void adc(void) {
-  //top= (cell_t) analogRead(top);
-  top= (cell_t) 0;
-}
-
 static void setpin(int p, int level) {
 #ifdef esp32
    gpio_pad_select_gpio(p);
@@ -543,186 +260,150 @@ static void setpin(int p, int level) {
 #endif
 }
 
-void pin(void)
-{  WP=top; pop;
-   //ledcAttachPin(top,WP);
-   setpin(WP, top);
-   pop;
-}
-
-void ms(void) {
-  WP = top; pop;
+static void mspause(cell_t ms) {
 #ifdef esp32
-  vTaskDelay(WP / portTICK_PERIOD_MS);
+  vTaskDelay(ms / portTICK_PERIOD_MS);
 #endif
 }
 
-void duty(void)
-{  WP=top; pop;
-   //ledcAnalogWrite(WP,top,255);
-   pop;
-}
+#define PRIMITIVE_LIST \
+  X(nop, next()) \
+  X(accept, len = duplexread(cData, top); top = len) \
+  X(qrx, push fgetc(stdin); push -1) \
+  X(txsto, char c=top; fputc(c, stdout); pop) \
+  X(docon, push data[WP/sizeof(cell_t)]) \
+  X(dolit, push data[IP/sizeof(cell_t)]; IP += sizeof(cell_t); next()) \
+  X(dolist, rack[(unsigned char)++R] = IP; IP = WP; next()) \
+  X(exit, IP = (cell_t) rack[(unsigned char)R--]; next()) \
+  X(execu, P = top; WP = P + sizeof(cell_t); pop) \
+  X(donext, if(rack[(unsigned char)R]) \
+    (rack[(unsigned char)R] -= 1, IP = data[IP/sizeof(cell_t)]); \
+    else (IP += sizeof(cell_t), R--); next()) \
+  X(qbran, if(top == 0) IP = data[IP/sizeof(cell_t)]; \
+    else (IP += sizeof(cell_t), pop); next()) \
+  X(bran, IP = data[IP/sizeof(cell_t)]; next()) \
+  X(store, data[top/sizeof(cell_t)] = stack[(unsigned char)S--]; pop) \
+  X(at, top = data[top/sizeof(cell_t)]) \
+  X(cstor, cData[top] = (unsigned char) stack[(unsigned char)S--]; pop) \
+  X(cat, top = (cell_t) cData[top]) \
+  X(rpat, ) \
+  X(rpsto, ) \
+  X(rfrom, push rack[(unsigned char)R--]) \
+  X(rat, push rack[(unsigned char)R]) \
+  X(tor, rack[(unsigned char)++R] = top; pop) \
+  X(spat, ) \
+  X(spsto, ) \
+  X(drop, pop) \
+  X(dup, stack[(unsigned char)++S] = top) \
+  X(swap, WP = top; top = stack[(unsigned char)S]; \
+    stack[(unsigned char)S] = WP) \
+  X(over, push stack[(unsigned char)(S-1)] ) \
+  X(zless, top = (top < 0) LOGICAL) \
+  X(andd, top &= stack[(unsigned char)S--]) \
+  X(orr, top |= stack[(unsigned char)S--]) \
+  X(xorr, top ^= stack[(unsigned char)S--]) \
+  X(uplus, stack[(unsigned char)S] += top; \
+    top = LOWER(stack[(unsigned char)S], top)) \
+  X(next, next()) \
+  X(qdup, if(top) stack[(unsigned char)++S] = top) \
+  X(rot, WP = stack[(unsigned char)(S-1)]; \
+    stack[(unsigned char)(S-1)] = stack[(unsigned char)S]; \
+    stack[(unsigned char)S] = top; top = WP) \
+  X(ddrop, fun_drop(); fun_drop()) \
+  X(ddup, fun_over(); fun_over()) \
+  X(plus, top += stack[(unsigned char)S--]) \
+  X(inver, top = -top-1) \
+  X(negat, top = 0 - top) \
+  X(dnega, fun_inver(); fun_tor(); fun_inver(); push 1; fun_uplus(); \
+    fun_rfrom(); fun_plus()) \
+  X(subb, top = stack[(unsigned char)S--] - top) \
+  X(abss, if(top < 0) top = -top) \
+  X(equal, top = (stack[(unsigned char)S--] == top) LOGICAL) \
+  X(uless, top = LOWER(stack[(unsigned char)S], top) LOGICAL; S--) \
+  X(less, top = (stack[(unsigned char)S--] < top) LOGICAL) \
+  X(ummod, d = (udcell_t)((ucell_t)top); \
+    m = (udcell_t)((ucell_t)stack[(unsigned char) S]); \
+    n = (udcell_t)((ucell_t)stack[(unsigned char) (S - 1)]); \
+    n += m << CELL_BITS; \
+    pop; \
+    if (d == 0) (top = 0, stack[S] = 0); \
+    else (top = (ucell_t)(n / d), \
+    stack[(unsigned char) S] = (ucell_t)(n%d))) \
+  X(msmod, d = (dcell_t)((cell_t)top); \
+    m = (dcell_t)((cell_t)stack[(unsigned char) S]); \
+    n = (dcell_t)((cell_t)stack[(unsigned char) S - 1]); \
+    n += m << CELL_BITS; \
+    pop; \
+    if (d == 0) (top = 0, stack[S] = 0); \
+    else (top = (cell_t)(n / d), \
+    stack[(unsigned char) S] = (cell_t)(n%d))) \
+  X(slmod, if (top != 0) \
+    (WP = stack[(unsigned char) S] / top, \
+    stack[(unsigned char) S] %= top, \
+    top = WP)) \
+  X(mod, top = (top) ? stack[(unsigned char) S--] % top \
+    : stack[(unsigned char) S--]) \
+  X(slash, top = (top) ? stack[(unsigned char) S--] / top : (S--, 0)) \
+  X(umsta, d = (udcell_t)top; \
+    m = (udcell_t)stack[(unsigned char) S]; \
+    m *= d; \
+    top = (ucell_t)(m >> CELL_BITS); \
+    stack[(unsigned char) S] = (ucell_t)m) \
+  X(star, top *= stack[(unsigned char) S--]) \
+  X(mstar, d = (dcell_t)top; \
+    m = (dcell_t)stack[(unsigned char) S]; \
+    m *= d; \
+    top = (cell_t)(m >> CELL_BITS); \
+    stack[(unsigned char) S] = (cell_t)m) \
+  X(ssmod, d = (dcell_t)top; \
+    m = (dcell_t)stack[(unsigned char) S]; \
+    n = (dcell_t)stack[(unsigned char) (S - 1)]; \
+    n *= m; \
+    pop; \
+    top = (cell_t)(n / d); \
+    stack[(unsigned char) S] = (cell_t)(n%d)) \
+  X(stasl, d = (dcell_t)top; \
+    m = (dcell_t)stack[(unsigned char) S]; \
+    n = (dcell_t)stack[(unsigned char) (S - 1)]; \
+    n *= m; \
+    pop; pop; \
+    top = (cell_t)(n / d)) \
+  X(pick, top = stack[(unsigned char)(S-top)]) \
+  X(pstor, data[top/sizeof(cell_t)] += stack[(unsigned char)S--]; pop) \
+  X(dstor, data[(top/sizeof(cell_t))+1] = stack[(unsigned char)S--]; \
+    data[top/sizeof(cell_t)] = stack[(unsigned char)S--]; pop) \
+  X(dat, push data[top/sizeof(cell_t)]; top = data[(top/sizeof(cell_t))+1]) \
+  X(count, stack[(unsigned char)++S] = top + 1; top = cData[top]) \
+  X(dovar, push WP) \
+  X(max, if (top < stack[(unsigned char)S]) pop; else S--) \
+  X(min, if (top < stack[(unsigned char)S]) S--; else pop) \
+  X(tone, WP=top; pop; /* ledcWriteTone(WP,top); */ pop) \
+  X(sendPacket, ) \
+  X(poke, Pointer = (cell_t*)top; *Pointer = stack[(unsigned char)S--]; pop) \
+  X(peek, Pointer = (cell_t*)top; top = *Pointer) \
+  X(adc, /* top= (cell_t) analogRead(top); */ top = (cell_t) 0) \
+  X(pin, WP = top; pop; setpin(WP, top); pop) \
+  X(duty, WP = top; pop; /* ledcAnalogWrite(WP,top,255); */ pop) \
+  X(freq, WP = top; pop; /* ledcSetup(WP,top,13); */ pop) \
+  X(ms, WP = top; pop; mspause(WP)) \
+  X(terminate, exit(top))
 
-void freq(void)
-{  WP=top; pop;
-   //ledcSetup(WP,top,13);
-   pop;
-}
+#define X(name, code) static void fun_ ## name(void) { code; }
+  PRIMITIVE_LIST
+#undef X
 
-void terminate(void) {
-  exit(top);
-}
+static void (*primitives[])(void) = {
+#define X(name, code) fun_ ## name,
+  PRIMITIVE_LIST
+#undef X
+};
 
-void (*primitives[74])(void) = {
-    /* case 0 */ nop,
-    /* case 1 */ accep,
-    /* case 2 */ qrx,
-    /* case 3 */ txsto,
-    /* case 4 */ docon,
-    /* case 5 */ dolit,
-    /* case 6 */ dolist,
-    /* case 7 */ exitt,
-    /* case 8 */ execu,
-    /* case 9 */ donext,
-    /* case 10 */ qbran,
-    /* case 11 */ bran,
-    /* case 12 */ store,
-    /* case 13 */ at,
-    /* case 14 */ cstor,
-    /* case 15 */ cat,
-    /* case 16 */ nop,
-    /* case 17 */ nop,
-    /* case 18 */ rfrom,
-    /* case 19 */ rat,
-    /* case 20 */ tor,
-    /* case 21 */ nop,
-    /* case 22 */ nop,
-    /* case 23 */ drop,
-    /* case 24 */ dup_,
-    /* case 25 */ swap,
-    /* case 26 */ over,
-    /* case 27 */ zless,
-    /* case 28 */ andd,
-    /* case 29 */ orr,
-    /* case 30 */ xorr,
-    /* case 31 */ uplus,
-    /* case 32 */ next,
-    /* case 33 */ qdup,
-    /* case 34 */ rot,
-    /* case 35 */ ddrop,
-    /* case 36 */ ddup,
-    /* case 37 */ plus,
-    /* case 38 */ inver,
-    /* case 39 */ negat,
-    /* case 40 */ dnega,
-    /* case 41 */ subb,
-    /* case 42 */ abss,
-    /* case 43 */ equal,
-    /* case 44 */ uless,
-    /* case 45 */ less,
-    /* case 46 */ ummod,
-    /* case 47 */ msmod,
-    /* case 48 */ slmod,
-    /* case 49 */ mod,
-    /* case 50 */ slash,
-    /* case 51 */ umsta,
-    /* case 52 */ star,
-    /* case 53 */ mstar,
-    /* case 54 */ ssmod,
-    /* case 55 */ stasl,
-    /* case 56 */ pick,
-    /* case 57 */ pstor,
-    /* case 58 */ dstor,
-    /* case 59 */ dat,
-    /* case 60 */ count,
-    /* case 61 */ dovar,
-    /* case 62 */ maxx,
-    /* case 63 */ minn,
-    /* case 64 */ audio,
-    /* case 65 */ sendPacket,
-    /* case 66 */ poke,
-    /* case 67 */ peeek,
-    /* case 68 */ adc,
-    /* case 69 */ pin,
-    /* case 70 */ duty,
-    /* case 71 */ freq,
-    /* case 72 */ ms,
-    /* case 73 */ terminate };
-
-int as_nop=0;
-int as_accept=1;
-int as_qrx=2;
-int as_txsto=3;
-int as_docon=4;
-int as_dolit=5;
-int as_dolist=6;
-int as_exit=7;
-int as_execu=8;
-int as_donext=9;
-int as_qbran=10;
-int as_bran=11;
-int as_store=12;
-int as_at=13;
-int as_cstor=14;
-int as_cat=15;
-int as_rpat=16;
-int as_rpsto=17;
-int as_rfrom=18;
-int as_rat=19;
-int as_tor=20;
-int as_spat=21;
-int as_spsto=22;
-int as_drop=23;
-int as_dup=24;
-int as_swap=25;
-int as_over=26;
-int as_zless=27;
-int as_andd=28;
-int as_orr=29;
-int as_xorr=30;
-int as_uplus=31;
-int as_next=32;
-int as_qdup=33;
-int as_rot=34;
-int as_ddrop=35;
-int as_ddup=36;
-int as_plus=37;
-int as_inver=38;
-int as_negat=39;
-int as_dnega=40;
-int as_subb=41;
-int as_abss=42;
-int as_equal=43;
-int as_uless=44;
-int as_less=45;
-int as_ummod=46;
-int as_msmod=47;
-int as_slmod=48;
-int as_mod=49;
-int as_slash=50;
-int as_umsta=51;
-int as_star=52;
-int as_mstar=53;
-int as_ssmod=54;
-int as_stasl=55;
-int as_pick=56;
-int as_pstor=57;
-int as_dstor=58;
-int as_dat=59;
-int as_count=60;
-int as_dovar=61;
-int as_max=62;
-int as_min=63;
-int as_tone=64;
-int as_sendPacket=65;
-int as_poke=66;
-int as_peek=67;
-int as_adc=68;
-int as_pin=69;
-int as_duty=70;
-int as_freq=71;
-int as_ms=72;
-int as_terminate=73;
+enum {
+  as_unknown = -1,
+#define X(name, code) as_ ## name,
+  PRIMITIVE_LIST
+#undef X
+};
 
 int CODE(const char *name, ... ) {
   HEADER(name);
@@ -931,7 +612,7 @@ int main(void) {
   int PEEK=CODE("PEEK", as_peek, as_next);
   int ADC=CODE("ADC", as_adc, as_next);
   int PIN=CODE("PIN", as_pin, as_next);
-  int TONE=CODE("TONE", as_tone,as_next);
+  int TONE=CODE("TONE", as_tone, as_next);
   int DUTY=CODE("DUTY", as_duty, as_next);
   int FREQ=CODE("FREQ", as_freq, as_next);
   int MS=CODE("MS", as_ms, as_next);
