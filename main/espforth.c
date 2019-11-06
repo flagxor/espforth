@@ -94,7 +94,136 @@ cell_t  P, IP, WP, top, links, len ;
 uint8_t* cData ;
 dcell_t d, n, m ;
 
-int EXITT=0,BRAN=0,QBRAN=0,DOLIT=0,DONXT=0,DOTQP=0,STRQP=0,TOR=0,ABORQP=0;
+#define PRIMITIVE_LIST \
+  X("NOP", NOP, next()) \
+  X("ACCEPT", ACCEPT, len = duplexread(cData, top); top = len) \
+  X("?KEY", QKEY, push fgetc(stdin); push -1) \
+  X("EMIT", EMIT, char c=top; fputc(c, stdout); pop) \
+  X("DOCON", DOCON, push data[WP/sizeof(cell_t)]) \
+  X("DOLIT", DOLIT, push data[IP/sizeof(cell_t)]; \
+    IP += sizeof(cell_t); next()) \
+  X("DOLIST", DOLIST, rack[(unsigned char)++R] = IP; IP = WP; next()) \
+  X("EXIT", EXIT, IP = (cell_t) rack[(unsigned char)R--]; next()) \
+  X("EXECUTE", EXECUTE, P = top; WP = P + sizeof(cell_t); pop) \
+  X("DONEXT", DONEXT, if(rack[(unsigned char)R]) \
+    (rack[(unsigned char)R] -= 1, IP = data[IP/sizeof(cell_t)]); \
+    else (IP += sizeof(cell_t), R--); next()) \
+  X("QBRANCH", QBRANCH, if(top == 0) IP = data[IP/sizeof(cell_t)]; \
+    else IP += sizeof(cell_t); pop; next()) \
+  X("BRANCH", BRANCH, IP = data[IP/sizeof(cell_t)]; next()) \
+  X("!", STORE, data[top/sizeof(cell_t)] = stack[(unsigned char)S--]; pop) \
+  X("@", AT, top = data[top/sizeof(cell_t)]) \
+  X("C!", CSTORE, cData[top] = (unsigned char) stack[(unsigned char)S--]; pop) \
+  X("C@", CAT, top = (cell_t) cData[top]) \
+  X("RPAT", RPAT, ) \
+  X("RPSTO", RPSTO, ) \
+  X("R>", RFROM, push rack[(unsigned char)R--]) \
+  X("R@", RAT, push rack[(unsigned char)R]) \
+  X(">R", TOR, rack[(unsigned char)++R] = top; pop) \
+  X("SPAT", SPAT, ) \
+  X("SPSTO", SPSTO, ) \
+  X("DROP", DROP, pop) \
+  X("DUP", DUP, stack[(unsigned char)++S] = top) \
+  X("SWAP", SWAP, WP = top; top = stack[(unsigned char)S]; \
+    stack[(unsigned char)S] = WP) \
+  X("OVER", OVER, push stack[(unsigned char)(S-1)] ) \
+  X("0<", ZLESS, top = (top < 0) LOGICAL) \
+  X("AND", AND, top &= stack[(unsigned char)S--]) \
+  X("OR", OR, top |= stack[(unsigned char)S--]) \
+  X("XOR", XOR, top ^= stack[(unsigned char)S--]) \
+  X("U+", UPLUS, stack[(unsigned char)S] += top; \
+    top = LOWER(stack[(unsigned char)S], top)) \
+  X("NEXT", NEXTT, next()) \
+  X("?DUP", QDUP, if(top) stack[(unsigned char)++S] = top) \
+  X("ROT", ROT, WP = stack[(unsigned char)(S-1)]; \
+    stack[(unsigned char)(S-1)] = stack[(unsigned char)S]; \
+    stack[(unsigned char)S] = top; top = WP) \
+  X("2DROP", DDROP, fun_DROP(); fun_DROP()) \
+  X("2DUP", DDUP, fun_OVER(); fun_OVER()) \
+  X("+", PLUS, top += stack[(unsigned char)S--]) \
+  X("INVERSE", INVERSE, top = -top-1) \
+  X("NEGATE", NEGATE, top = 0 - top) \
+  X("DNEGATE", DNEGATE, fun_INVERSE(); \
+    fun_TOR(); fun_INVERSE(); push 1; fun_UPLUS(); \
+    fun_RFROM(); fun_PLUS()) \
+  X("-", SUB, top = stack[(unsigned char)S--] - top) \
+  X("ABS", ABS, if(top < 0) top = -top) \
+  X("=", EQUAL, top = (stack[(unsigned char)S--] == top) LOGICAL) \
+  X("U<", ULESS, top = LOWER(stack[(unsigned char)S], top) LOGICAL; S--) \
+  X("<", LESS, top = (stack[(unsigned char)S--] < top) LOGICAL) \
+  X("UM/MOD", UMMOD, d = (udcell_t)((ucell_t)top); \
+    m = (udcell_t)((ucell_t)stack[(unsigned char) S]); \
+    n = (udcell_t)((ucell_t)stack[(unsigned char) (S - 1)]); \
+    n += m << CELL_BITS; \
+    pop; \
+    if (d == 0) (top = 0, stack[S] = 0); \
+    else (top = (ucell_t)(n / d), \
+    stack[(unsigned char) S] = (ucell_t)(n%d))) \
+  X("M/MOD", MSMOD, d = (dcell_t)((cell_t)top); \
+    m = (dcell_t)((cell_t)stack[(unsigned char) S]); \
+    n = (dcell_t)((cell_t)stack[(unsigned char) S - 1]); \
+    n += m << CELL_BITS; \
+    pop; \
+    if (d == 0) (top = 0, stack[S] = 0); \
+    else (top = (cell_t)(n / d), \
+    stack[(unsigned char) S] = (cell_t)(n%d))) \
+  X("/MOD", SLMOD, if (top != 0) \
+    (WP = stack[(unsigned char) S] / top, \
+    stack[(unsigned char) S] %= top, \
+    top = WP)) \
+  X("MOD", MOD, top = (top) ? stack[(unsigned char) S--] % top \
+    : stack[(unsigned char) S--]) \
+  X("/", SLASH, top = (top) ? stack[(unsigned char) S--] / top : (S--, 0)) \
+  X("UM*", UMSTA, d = (udcell_t)top; \
+    m = (udcell_t)stack[(unsigned char) S]; \
+    m *= d; \
+    top = (ucell_t)(m >> CELL_BITS); \
+    stack[(unsigned char) S] = (ucell_t)m) \
+  X("*", STAR, top *= stack[(unsigned char) S--]) \
+  X("M*", MSTAR, d = (dcell_t)top; \
+    m = (dcell_t)stack[(unsigned char) S]; \
+    m *= d; \
+    top = (cell_t)(m >> CELL_BITS); \
+    stack[(unsigned char) S] = (cell_t)m) \
+  X("*/MOD", SSMOD, d = (dcell_t)top; \
+    m = (dcell_t)stack[(unsigned char) S]; \
+    n = (dcell_t)stack[(unsigned char) (S - 1)]; \
+    n *= m; \
+    pop; \
+    top = (cell_t)(n / d); \
+    stack[(unsigned char) S] = (cell_t)(n%d)) \
+  X("*/", STASL, d = (dcell_t)top; \
+    m = (dcell_t)stack[(unsigned char) S]; \
+    n = (dcell_t)stack[(unsigned char) (S - 1)]; \
+    n *= m; \
+    pop; pop; \
+    top = (cell_t)(n / d)) \
+  X("PICK", PICK, top = stack[(unsigned char)(S-top)]) \
+  X("+!", PSTORE, data[top/sizeof(cell_t)] += stack[(unsigned char)S--]; pop) \
+  X("2!", DSTORE, data[(top/sizeof(cell_t))+1] = stack[(unsigned char)S--]; \
+    data[top/sizeof(cell_t)] = stack[(unsigned char)S--]; pop) \
+  X("2@", DAT, push data[top/sizeof(cell_t)]; \
+    top = data[(top/sizeof(cell_t))+1]) \
+  X("COUNT", COUNT, stack[(unsigned char)++S] = top + 1; top = cData[top]) \
+  X("DOVAR", DOVAR, push WP) \
+  X("MAX", MAX, if (top < stack[(unsigned char)S]) pop; else S--) \
+  X("MIN", MIN, if (top < stack[(unsigned char)S]) S--; else pop) \
+  X("TONE", TONE, WP=top; pop; /* ledcWriteTone(WP,top); */ pop) \
+  X("sendPacket", sendPacket, ) \
+  X("POKE", POKE, Pointer = (cell_t*)top; \
+    *Pointer = stack[(unsigned char)S--]; pop) \
+  X("PEEK", PEEK, Pointer = (cell_t*)top; top = *Pointer) \
+  X("ADC", ADC, /* top= (cell_t) analogRead(top); */ top = (cell_t) 0) \
+  X("PIN", PIN, WP = top; pop; setpin(WP, top); pop) \
+  X("DUTY", DUTY, WP = top; pop; /* ledcAnalogWrite(WP,top,255); */ pop) \
+  X("FREQ", FREQ, WP = top; pop; /* ledcSetup(WP,top,13); */ pop) \
+  X("MS", MS, WP = top; pop; mspause(WP)) \
+  X("TERMINATE", TERMINATE, exit(top))
+
+static int ABORQP=0, DOTQP=0, STRQP = 0;
+#define X(sname, name, code) static int name = 0;
+  PRIMITIVE_LIST
+#undef X
 
 cell_t data[16000] = {};
 int IMEDD=0x80;
@@ -183,17 +312,18 @@ static int LABEL(int len, ... ) {
 
 #define MACRO_LIST \
   X(BEGIN, pushR=P) \
-  X(AGAIN, data[P++]=BRAN; data[P++]=popR*sizeof(cell_t)) \
-  X(UNTIL, data[P++]=QBRAN; data[P++]=popR*sizeof(cell_t)) \
-  X(WHILE, data[P++]=QBRAN; data[P++]=0; k=popR; pushR=(P-1); pushR=k) \
-  X(REPEAT, data[P++]=BRAN; data[P++]=popR*sizeof(cell_t); \
-            data[popR]=P*sizeof(cell_t)) \
-  X(IF, data[P++]=QBRAN; pushR=P; data[P++]=0) \
-  X(ELSE, data[P++]=BRAN; data[P++]=0; data[popR]=P*sizeof(cell_t); pushR=P-1) \
+  X(AGAIN, data[P++]=BRANCH; data[P++]=popR*sizeof(cell_t)) \
+  X(UNTIL, data[P++]=QBRANCH; data[P++]=popR*sizeof(cell_t)) \
+  X(WHILE, data[P++]=QBRANCH; data[P++]=0; k=popR; pushR=(P-1); pushR=k) \
+  X(REPEAT, data[P++]=BRANCH; data[P++]=popR*sizeof(cell_t); \
+    data[popR]=P*sizeof(cell_t)) \
+  X(IF, data[P++]=QBRANCH; pushR=P; data[P++]=0) \
+  X(ELSE, data[P++]=BRANCH; data[P++]=0; \
+    data[popR]=P*sizeof(cell_t); pushR=P-1) \
   X(THEN, data[popR]=P*sizeof(cell_t)) \
   X(FOR, data[P++]=TOR; pushR=P) \
-  X(NEXT, data[P++]=DONXT; data[P++]=popR*sizeof(cell_t)) \
-  X(AFT, data[P++]=BRAN; data[P++]=0; k=popR; pushR=P; pushR=P-1) \
+  X(NEXT, data[P++]=DONEXT; data[P++]=popR*sizeof(cell_t)) \
+  X(AFT, data[P++]=BRANCH; data[P++]=0; k=popR; pushR=P; pushR=P-1) \
   X(DOTQ, STR_LIKE(DOTQP)) \
   X(STRQ, STR_LIKE(STRQP)) \
   X(ABORTQ, STR_LIKE(ABORQP))
@@ -266,132 +396,6 @@ static void mspause(cell_t ms) {
 #endif
 }
 
-#define PRIMITIVE_LIST \
-  X("NOP", nop, next()) \
-  X("ACCEPT", accept, len = duplexread(cData, top); top = len) \
-  X("?KEY", qrx, push fgetc(stdin); push -1) \
-  X("EMIT", txsto, char c=top; fputc(c, stdout); pop) \
-  X("DOCON", docon, push data[WP/sizeof(cell_t)]) \
-  X("DOLIT", dolit, push data[IP/sizeof(cell_t)]; \
-    IP += sizeof(cell_t); next()) \
-  X("DOLIST", dolist, rack[(unsigned char)++R] = IP; IP = WP; next()) \
-  X("EXIT", exit, IP = (cell_t) rack[(unsigned char)R--]; next()) \
-  X("EXECUTE", execute, P = top; WP = P + sizeof(cell_t); pop) \
-  X("DONEXT", donext, if(rack[(unsigned char)R]) \
-    (rack[(unsigned char)R] -= 1, IP = data[IP/sizeof(cell_t)]); \
-    else (IP += sizeof(cell_t), R--); next()) \
-  X("QBRANCH", qbranch, if(top == 0) IP = data[IP/sizeof(cell_t)]; \
-    else IP += sizeof(cell_t); pop; next()) \
-  X("BRANCH", branch, IP = data[IP/sizeof(cell_t)]; next()) \
-  X("!", store, data[top/sizeof(cell_t)] = stack[(unsigned char)S--]; pop) \
-  X("@", at, top = data[top/sizeof(cell_t)]) \
-  X("C!", cstor, cData[top] = (unsigned char) stack[(unsigned char)S--]; pop) \
-  X("C@", cat, top = (cell_t) cData[top]) \
-  X("RPAT", rpat, ) \
-  X("RPSTO", rpsto, ) \
-  X("R>", rfrom, push rack[(unsigned char)R--]) \
-  X("R@", rat, push rack[(unsigned char)R]) \
-  X(">R", tor, rack[(unsigned char)++R] = top; pop) \
-  X("SPAT", spat, ) \
-  X("SPSTO", spsto, ) \
-  X("DROP", drop, pop) \
-  X("DUP", dup, stack[(unsigned char)++S] = top) \
-  X("SWAP", swap, WP = top; top = stack[(unsigned char)S]; \
-    stack[(unsigned char)S] = WP) \
-  X("OVER", over, push stack[(unsigned char)(S-1)] ) \
-  X("0<", zless, top = (top < 0) LOGICAL) \
-  X("AND", and, top &= stack[(unsigned char)S--]) \
-  X("OR", or, top |= stack[(unsigned char)S--]) \
-  X("XOR", xor, top ^= stack[(unsigned char)S--]) \
-  X("U+", uplus, stack[(unsigned char)S] += top; \
-    top = LOWER(stack[(unsigned char)S], top)) \
-  X("NEXT", next, next()) \
-  X("?DUP", qdup, if(top) stack[(unsigned char)++S] = top) \
-  X("ROT", rot, WP = stack[(unsigned char)(S-1)]; \
-    stack[(unsigned char)(S-1)] = stack[(unsigned char)S]; \
-    stack[(unsigned char)S] = top; top = WP) \
-  X("2DROP", ddrop, fun_drop(); fun_drop()) \
-  X("2DUP", ddup, fun_over(); fun_over()) \
-  X("+", plus, top += stack[(unsigned char)S--]) \
-  X("INVERSE", inverse, top = -top-1) \
-  X("NEGATE", negate, top = 0 - top) \
-  X("DNEGATE", dnegate, fun_inverse(); \
-    fun_tor(); fun_inverse(); push 1; fun_uplus(); \
-    fun_rfrom(); fun_plus()) \
-  X("-", sub, top = stack[(unsigned char)S--] - top) \
-  X("ABS", abs, if(top < 0) top = -top) \
-  X("=", equal, top = (stack[(unsigned char)S--] == top) LOGICAL) \
-  X("U<", uless, top = LOWER(stack[(unsigned char)S], top) LOGICAL; S--) \
-  X("<", less, top = (stack[(unsigned char)S--] < top) LOGICAL) \
-  X("UM/MOD", ummod, d = (udcell_t)((ucell_t)top); \
-    m = (udcell_t)((ucell_t)stack[(unsigned char) S]); \
-    n = (udcell_t)((ucell_t)stack[(unsigned char) (S - 1)]); \
-    n += m << CELL_BITS; \
-    pop; \
-    if (d == 0) (top = 0, stack[S] = 0); \
-    else (top = (ucell_t)(n / d), \
-    stack[(unsigned char) S] = (ucell_t)(n%d))) \
-  X("M/MOD", msmod, d = (dcell_t)((cell_t)top); \
-    m = (dcell_t)((cell_t)stack[(unsigned char) S]); \
-    n = (dcell_t)((cell_t)stack[(unsigned char) S - 1]); \
-    n += m << CELL_BITS; \
-    pop; \
-    if (d == 0) (top = 0, stack[S] = 0); \
-    else (top = (cell_t)(n / d), \
-    stack[(unsigned char) S] = (cell_t)(n%d))) \
-  X("/MOD", slmod, if (top != 0) \
-    (WP = stack[(unsigned char) S] / top, \
-    stack[(unsigned char) S] %= top, \
-    top = WP)) \
-  X("MOD", mod, top = (top) ? stack[(unsigned char) S--] % top \
-    : stack[(unsigned char) S--]) \
-  X("/", slash, top = (top) ? stack[(unsigned char) S--] / top : (S--, 0)) \
-  X("UM*", umsta, d = (udcell_t)top; \
-    m = (udcell_t)stack[(unsigned char) S]; \
-    m *= d; \
-    top = (ucell_t)(m >> CELL_BITS); \
-    stack[(unsigned char) S] = (ucell_t)m) \
-  X("*", star, top *= stack[(unsigned char) S--]) \
-  X("M*", mstar, d = (dcell_t)top; \
-    m = (dcell_t)stack[(unsigned char) S]; \
-    m *= d; \
-    top = (cell_t)(m >> CELL_BITS); \
-    stack[(unsigned char) S] = (cell_t)m) \
-  X("*/MOD", ssmod, d = (dcell_t)top; \
-    m = (dcell_t)stack[(unsigned char) S]; \
-    n = (dcell_t)stack[(unsigned char) (S - 1)]; \
-    n *= m; \
-    pop; \
-    top = (cell_t)(n / d); \
-    stack[(unsigned char) S] = (cell_t)(n%d)) \
-  X("*/", stasl, d = (dcell_t)top; \
-    m = (dcell_t)stack[(unsigned char) S]; \
-    n = (dcell_t)stack[(unsigned char) (S - 1)]; \
-    n *= m; \
-    pop; pop; \
-    top = (cell_t)(n / d)) \
-  X("PICK", pick, top = stack[(unsigned char)(S-top)]) \
-  X("+!", pstor, data[top/sizeof(cell_t)] += stack[(unsigned char)S--]; pop) \
-  X("2!", dstor, data[(top/sizeof(cell_t))+1] = stack[(unsigned char)S--]; \
-    data[top/sizeof(cell_t)] = stack[(unsigned char)S--]; pop) \
-  X("2@", dat, push data[top/sizeof(cell_t)]; \
-    top = data[(top/sizeof(cell_t))+1]) \
-  X("COUNT", count, stack[(unsigned char)++S] = top + 1; top = cData[top]) \
-  X("DOVAR", dovar, push WP) \
-  X("MAX", max, if (top < stack[(unsigned char)S]) pop; else S--) \
-  X("MIN", min, if (top < stack[(unsigned char)S]) S--; else pop) \
-  X("TONE", tone, WP=top; pop; /* ledcWriteTone(WP,top); */ pop) \
-  X("sendPacket", sendPacket, ) \
-  X("POKE", poke, Pointer = (cell_t*)top; \
-    *Pointer = stack[(unsigned char)S--]; pop) \
-  X("PEEK", peek, Pointer = (cell_t*)top; top = *Pointer) \
-  X("ADC", adc, /* top= (cell_t) analogRead(top); */ top = (cell_t) 0) \
-  X("PIN", pin, WP = top; pop; setpin(WP, top); pop) \
-  X("DUTY", duty, WP = top; pop; /* ledcAnalogWrite(WP,top,255); */ pop) \
-  X("FREQ", freq, WP = top; pop; /* ledcSetup(WP,top,13); */ pop) \
-  X("MS", ms, WP = top; pop; mspause(WP)) \
-  X("TERMINATE", terminate, exit(top))
-
 #define X(sname, name, code) static void fun_ ## name(void) { code; }
   PRIMITIVE_LIST
 #undef X
@@ -403,7 +407,7 @@ static void (*primitives[])(void) = {
 };
 
 enum {
-  as_unknown = -1,
+  as_UNKNOWN = -1,
 #define X(sname, name, code) as_ ## name,
   PRIMITIVE_LIST
 #undef X
@@ -422,7 +426,7 @@ int CODE(const char *name, ... ) {
     printf(" ");
     printf("%" PRIxCELL, s);
 #endif
-  } while(s != as_next);
+  } while(s != as_NEXTT);
   while (IP & CELL_MASK) {
     cData[IP++]=0;
   }
@@ -434,7 +438,7 @@ int COLON_WITH_FLAGS(int flags, const char *name, ...) {
   HEADER_WITH_FLAGS(flags, name);
   int addr=IP;
   P=IP/sizeof(cell_t);
-  data[P++] = as_dolist;
+  data[P++] = as_DOLIST;
   va_list argList;
   va_start(argList, name);
 #if DEBUG_COREWORDS
@@ -460,7 +464,7 @@ int COLON_WITH_FLAGS(int flags, const char *name, ...) {
 #endif
        break;
     }
-  } while (word != EXITT || R > 0 || last == DOLIT);
+  } while (word != EXIT || R > 0 || last == DOLIT);
   IP=P*sizeof(cell_t);
   va_end(argList);
   return addr;
@@ -470,7 +474,7 @@ int COLON_WITH_FLAGS(int flags, const char *name, ...) {
 #define COLON_IMMEDIATE(...) COLON_WITH_FLAGS(IMEDD, __VA_ARGS__)
 
 static int CONSTANT(const char *name, cell_t n) {
-  int ret = CODE(name, as_docon, as_next);
+  int ret = CODE(name, as_DOCON, as_NEXTT);
   Comma(n);
   return ret;
 }
@@ -545,283 +549,223 @@ int main(void) {
   int PPQN=CONSTANT("ppqn", datap += sizeof(cell_t));
   int CHANN=CONSTANT("channel", datap += sizeof(cell_t));
 
-  int NOP=CODE("NOP", as_nop, as_next);
-  int ACCEP=CODE("ACCEPT", as_accept, as_next);
-  int QKEY=CODE("?KEY", as_qrx, as_next);
-  int EMIT=CODE("EMIT", as_txsto, as_next);
-  DOLIT=CODE("DOLIT", as_dolit, as_next);
-  int DOLST=CODE("DOLIST", as_dolist, as_next);
-  EXITT=CODE("EXIT", as_exit, as_next);
-  int EXECU=CODE("EXECUTE", as_execute, as_next);
-  DONXT=CODE("DONEXT", as_donext, as_next);
-  QBRAN=CODE("QBRANCH", as_qbranch, as_next);
-  BRAN=CODE("BRANCH", as_branch, as_next);
-  int STORE=CODE("!", as_store, as_next);
-  int AT=CODE("@", as_at, as_next);
-  int CSTOR=CODE("C!", as_cstor, as_next);
-  int CAT=CODE("C@", as_cat, as_next);
-  int RFROM=CODE("R>", as_rfrom, as_next);
-  int RAT=CODE("R@", as_rat, as_next);
-  TOR=CODE(">R", as_tor, as_next);
-  int DROP=CODE("DROP", as_drop, as_next);
-  int DUPP=CODE("DUP", as_dup, as_next);
-  int SWAP=CODE("SWAP", as_swap, as_next);
-  int OVER=CODE("OVER", as_over, as_next);
-  int ZLESS=CODE("0<", as_zless, as_next);
-  int ANDD=CODE("AND", as_and, as_next);
-  int ORR=CODE("OR", as_or, as_next);
-  int XORR=CODE("XOR", as_xor, as_next);
-  int UPLUS=CODE("UM+", as_uplus, as_next);
-  int QDUP=CODE("?DUP", as_qdup, as_next);
-  int ROT=CODE("ROT", as_rot, as_next);
-  int DDROP=CODE("2DROP", as_ddrop, as_next);
-  int DDUP=CODE("2DUP", as_ddup, as_next);
-  int PLUS=CODE("+", as_plus, as_next);
-  int INVER=CODE("NOT", as_inverse, as_next);
-  int NEGAT=CODE("NEGATE", as_negate, as_next);
-  int DNEGA=CODE("DNEGATE", as_dnegate, as_next);
-  int SUBBB=CODE("-", as_sub, as_next);
-  int ABSS=CODE("ABS", as_abs, as_next);
-  int EQUAL=CODE("=", as_equal, as_next);
-  int ULESS=CODE("U<", as_uless, as_next);
-  int LESS=CODE("<", as_less, as_next);
-  int UMMOD=CODE("UM/MOD", as_ummod, as_next);
-  int MSMOD=CODE("M/MOD", as_msmod, as_next);
-  int SLMOD=CODE("/MOD", as_slmod, as_next);
-  int MODD=CODE("MOD", as_mod, as_next);
-  int SLASH=CODE("/", as_slash, as_next);
-  int UMSTA=CODE("UM*", as_umsta, as_next);
-  int STAR=CODE("*", as_star, as_next);
-  int MSTAR=CODE("M*", as_mstar, as_next);
-  int SSMOD=CODE("*/MOD", as_ssmod, as_next);
-  int STASL=CODE("*/", as_stasl, as_next);
-  int PICK=CODE("PICK", as_pick, as_next);
-  int PSTOR=CODE("+!", as_pstor, as_next);
-  int DSTOR=CODE("2!", as_dstor, as_next);
-  int DAT=CODE("2@", as_dat, as_next);
-  int COUNT=CODE("COUNT", as_count, as_next);
-  int MAX=CODE("MAX", as_max, as_next);
-  int MIN=CODE("MIN", as_min, as_next);
-  int SENDP=CODE("sendPacket", as_sendPacket, as_next);
-  int POKE=CODE("POKE", as_poke, as_next);
-  int PEEK=CODE("PEEK", as_peek, as_next);
-  int ADC=CODE("ADC", as_adc, as_next);
-  int PIN=CODE("PIN", as_pin, as_next);
-  int TONE=CODE("TONE", as_tone, as_next);
-  int DUTY=CODE("DUTY", as_duty, as_next);
-  int FREQ=CODE("FREQ", as_freq, as_next);
-  int MS=CODE("MS", as_ms, as_next);
-  int TERMINATE=CODE("TERMINATE", as_terminate, as_next);
+#define X(sname, name, code) name = CODE(sname, as_ ## name, as_NEXTT);
+  PRIMITIVE_LIST
+#undef X
 
   int BLANK=CONSTANT("BL", 32);
   int CELL=CONSTANT("CELL", sizeof(cell_t));
-  int CELLP=CODE("CELL+", as_docon, as_plus, as_next); Comma(sizeof(cell_t));
-  int CELLM=CODE("CELL-", as_docon, as_sub, as_next); Comma(sizeof(cell_t));
-  int CELLS=CODE("CELLS", as_docon, as_star, as_next); Comma(sizeof(cell_t));
-  int CELLD=CODE("CELL/", as_docon, as_slash, as_next); Comma(sizeof(cell_t));
-  int ONEP=CODE("1+", as_docon, as_plus, as_next); Comma(1);
-  int ONEM=CODE("1-", as_docon, as_sub, as_next); Comma(1);
-  int TWOP=CODE("2+", as_docon, as_plus, as_next); Comma(2);
-  int TWOM=CODE("2-", as_docon, as_sub, as_next); Comma(2);
-  int TWOST=CODE("2*", as_docon, as_star, as_next); Comma(2);
-  int TWOS=CODE("2/", as_docon, as_slash, as_next); Comma(2);
+  int CELLP=CODE("CELL+", as_DOCON, as_PLUS, as_NEXTT); Comma(sizeof(cell_t));
+  int CELLM=CODE("CELL-", as_DOCON, as_SUB, as_NEXTT); Comma(sizeof(cell_t));
+  int CELLS=CODE("CELLS", as_DOCON, as_STAR, as_NEXTT); Comma(sizeof(cell_t));
+  int CELLD=CODE("CELL/", as_DOCON, as_SLASH, as_NEXTT); Comma(sizeof(cell_t));
+  int ONEP=CODE("1+", as_DOCON, as_PLUS, as_NEXTT); Comma(1);
+  int ONEM=CODE("1-", as_DOCON, as_SUB, as_NEXTT); Comma(1);
+  int TWOP=CODE("2+", as_DOCON, as_PLUS, as_NEXTT); Comma(2);
+  int TWOM=CODE("2-", as_DOCON, as_SUB, as_NEXTT); Comma(2);
+  int TWOST=CODE("2*", as_DOCON, as_STAR, as_NEXTT); Comma(2);
+  int TWOS=CODE("2/", as_DOCON, as_SLASH, as_NEXTT); Comma(2);
 
-  int BYE=COLON("BYE", DOLIT, 0, TERMINATE, EXITT);
-  int KEY=COLON("KEY", BEGIN, QKEY, UNTIL, EXITT);
-  int WITHI=COLON("WITHIN", OVER,SUBBB,TOR,SUBBB,RFROM,ULESS,EXITT);
-  int TCHAR=COLON(">CHAR", DOLIT,0x7F,ANDD,DUPP,DOLIT,127,BLANK,WITHI,
-                  IF, DROP,DOLIT,'_', THEN ,EXITT);
-  int ALIGN=COLON("ALIGNED", DOLIT,CELL_MASK,PLUS, DOLIT,~CELL_MASK,ANDD,EXITT);
-  int HERE=COLON("HERE", CP,AT,EXITT);
-  int PAD=COLON("PAD", HERE,DOLIT,80,PLUS,EXITT);
-  int TIB=COLON("TIB", TTIB,AT,EXITT);
-  int ATEXE=COLON("@EXECUTE", AT,QDUP,IF,EXECU,THEN,EXITT);
-  int CMOVEE=COLON("CMOVE", FOR,AFT,OVER,CAT,OVER,CSTOR,TOR,ONEP,RFROM,ONEP,
-                            THEN,NEXT,DDROP,EXITT);
+  int BYE=COLON("BYE", DOLIT,0,TERMINATE,EXIT);
+  int KEY=COLON("KEY", BEGIN,QKEY,UNTIL,EXIT);
+  int WITHI=COLON("WITHIN", OVER,SUB,TOR,SUB,RFROM,ULESS,EXIT);
+  int TCHAR=COLON(">CHAR", DOLIT,0x7F,AND,DUP,DOLIT,127,BLANK,WITHI,
+                  IF, DROP,DOLIT,'_', THEN, EXIT);
+  int ALIGN=COLON("ALIGNED", DOLIT,CELL_MASK,PLUS, DOLIT,~CELL_MASK,AND,EXIT);
+  int HERE=COLON("HERE", CP,AT,EXIT);
+  int PAD=COLON("PAD", HERE,DOLIT,80,PLUS,EXIT);
+  int TIB=COLON("TIB", TTIB,AT,EXIT);
+  int ATEXE=COLON("@EXECUTE", AT,QDUP,IF,EXECUTE,THEN,EXIT);
+  int CMOVEE=COLON("CMOVE", FOR,AFT,OVER,CAT,OVER,CSTORE,TOR,ONEP,RFROM,ONEP,
+                            THEN,NEXT,DDROP,EXIT);
   int MOVE=COLON("MOVE", CELLD,FOR,AFT,OVER,AT,OVER,STORE,TOR,CELLP,RFROM,CELLP,
-                         THEN,NEXT,DDROP,EXITT);
-  int FILL=COLON("FILL", SWAP,FOR,SWAP,AFT,DDUP,CSTOR,ONEP,THEN,NEXT,
-                         DDROP,EXITT);
-  int DIGIT=COLON("DIGIT", DOLIT,9,OVER,LESS,DOLIT,7,ANDD,PLUS,
-                           DOLIT,'0',PLUS,EXITT);
-  int EXTRC=COLON("EXTRACT", DOLIT,0,SWAP,UMMOD,SWAP,DIGIT,EXITT);
-  int BDIGS=COLON("<#", PAD,HLD,STORE,EXITT);
-  int HOLD=COLON("HOLD", HLD,AT,ONEM,DUPP,HLD,STORE,CSTOR,EXITT);
-  int DIG=COLON("#", BASE,AT,EXTRC,HOLD,EXITT);
-  int DIGS=COLON("#S", BEGIN,DIG,DUPP,WHILE,REPEAT,EXITT);
-  int SIGN=COLON("SIGN", ZLESS,IF,DOLIT,'-',HOLD,THEN,EXITT);
-  int EDIGS=COLON("#>", DROP,HLD,AT,PAD,OVER,SUBBB,EXITT);
-  int STRR=COLON("str", DUPP,TOR,ABSS,BDIGS,DIGS,RFROM,SIGN,EDIGS,EXITT);
-  int HEXX=COLON("HEX", DOLIT,16,BASE,STORE,EXITT);
-  int DECIM=COLON("DECIMAL", DOLIT,10,BASE,STORE,EXITT);
-  int UPPER=COLON("wupper", DOLIT,UPPER_MASK,ANDD,EXITT);
-  int TOUPP=COLON(">upper", DUPP,DOLIT,'a',DOLIT,'{',WITHI,IF,
-                            DOLIT,0x5F,ANDD,THEN,EXITT);
-  int DIGTQ=COLON("DIGIT?", TOR,TOUPP,DOLIT,'0',SUBBB,DOLIT,9,OVER,LESS,
-                            IF,DOLIT,7,SUBBB,DUPP,DOLIT,10,LESS,ORR,THEN,
-                            DUPP,RFROM,ULESS,EXITT);
+                         THEN,NEXT,DDROP,EXIT);
+  int FILL=COLON("FILL", SWAP,FOR,SWAP,AFT,DDUP,CSTORE,ONEP,THEN,NEXT,
+                         DDROP,EXIT);
+  int DIGIT=COLON("DIGIT", DOLIT,9,OVER,LESS,DOLIT,7,AND,PLUS,
+                           DOLIT,'0',PLUS,EXIT);
+  int EXTRC=COLON("EXTRACT", DOLIT,0,SWAP,UMMOD,SWAP,DIGIT,EXIT);
+  int BDIGS=COLON("<#", PAD,HLD,STORE,EXIT);
+  int HOLD=COLON("HOLD", HLD,AT,ONEM,DUP,HLD,STORE,CSTORE,EXIT);
+  int DIG=COLON("#", BASE,AT,EXTRC,HOLD,EXIT);
+  int DIGS=COLON("#S", BEGIN,DIG,DUP,WHILE,REPEAT,EXIT);
+  int SIGN=COLON("SIGN", ZLESS,IF,DOLIT,'-',HOLD,THEN,EXIT);
+  int EDIGS=COLON("#>", DROP,HLD,AT,PAD,OVER,SUB,EXIT);
+  int STRR=COLON("str", DUP,TOR,ABS,BDIGS,DIGS,RFROM,SIGN,EDIGS,EXIT);
+  int HEXX=COLON("HEX", DOLIT,16,BASE,STORE,EXIT);
+  int DECIM=COLON("DECIMAL", DOLIT,10,BASE,STORE,EXIT);
+  int UPPER=COLON("wupper", DOLIT,UPPER_MASK,AND,EXIT);
+  int TOUPP=COLON(">upper", DUP,DOLIT,'a',DOLIT,'{',WITHI,IF,
+                            DOLIT,0x5F,AND,THEN,EXIT);
+  int DIGTQ=COLON("DIGIT?", TOR,TOUPP,DOLIT,'0',SUB,DOLIT,9,OVER,LESS,
+                            IF,DOLIT,7,SUB,DUP,DOLIT,10,LESS,OR,THEN,
+                            DUP,RFROM,ULESS,EXIT);
   int NUMBQ=COLON("NUMBER?", BASE,AT,TOR,DOLIT,0,OVER,COUNT,OVER,CAT,
                              DOLIT,'$',EQUAL,IF,HEXX,SWAP,ONEP,SWAP,ONEM,THEN,
-                             OVER,CAT,DOLIT,'-',EQUAL,TOR,SWAP,RAT,SUBBB,
+                             OVER,CAT,DOLIT,'-',EQUAL,TOR,SWAP,RAT,SUB,
                              SWAP,RAT,PLUS,QDUP,IF,ONEM,
-                             FOR,DUPP,TOR,CAT,BASE,AT,DIGTQ,
+                             FOR,DUP,TOR,CAT,BASE,AT,DIGTQ,
                              WHILE,SWAP,BASE,AT,STAR,PLUS,RFROM,ONEP,NEXT,
-                             DROP,RAT,IF,NEGAT,THEN,SWAP,
+                             DROP,RAT,IF,NEGATE,THEN,SWAP,
                              ELSE,RFROM,RFROM,DDROP,DDROP,DOLIT,0,THEN,
-                             DUPP,THEN,RFROM,DDROP,RFROM,BASE,STORE,EXITT);
-  int SPACE=COLON("SPACE", BLANK,EMIT,EXITT);
-  int CHARS=COLON("CHARS", SWAP,DOLIT,0,MAX,FOR,AFT,DUPP,EMIT,THEN,NEXT,
-                           DROP,EXITT);
-  int SPACS=COLON("SPACES", BLANK,CHARS,EXITT);
+                             DUP,THEN,RFROM,DDROP,RFROM,BASE,STORE,EXIT);
+  int SPACE=COLON("SPACE", BLANK,EMIT,EXIT);
+  int CHARS=COLON("CHARS", SWAP,DOLIT,0,MAX,FOR,AFT,DUP,EMIT,THEN,NEXT,
+                           DROP,EXIT);
+  int SPACS=COLON("SPACES", BLANK,CHARS,EXIT);
   int TYPES=COLON("TYPE",
-    FOR,AFT,DUPP,CAT,TCHAR,EMIT,ONEP,THEN,NEXT,DROP,EXITT);
-  int CR=COLON("CR", DOLIT,'\n',DOLIT,'\r',EMIT,EMIT,EXITT);
-  int DOSTR=COLON("do$", RFROM,RAT,RFROM,COUNT,PLUS,ALIGN,TOR,SWAP,TOR,EXITT);
-  int STRQP=COLON("$\"|", DOSTR,EXITT);
-  DOTQP=COLON(".\"|", DOSTR,COUNT,TYPES,EXITT);
-  int DOTR=COLON(".R", TOR,STRR,RFROM,OVER,SUBBB,SPACS,TYPES,EXITT);
+    FOR,AFT,DUP,CAT,TCHAR,EMIT,ONEP,THEN,NEXT,DROP,EXIT);
+  int CR=COLON("CR", DOLIT,'\n',DOLIT,'\r',EMIT,EMIT,EXIT);
+  int DOSTR=COLON("do$", RFROM,RAT,RFROM,COUNT,PLUS,ALIGN,TOR,SWAP,TOR,EXIT);
+  STRQP=COLON("$\"|", DOSTR,EXIT);
+  DOTQP=COLON(".\"|", DOSTR,COUNT,TYPES,EXIT);
+  int DOTR=COLON(".R", TOR,STRR,RFROM,OVER,SUB,SPACS,TYPES,EXIT);
   int UDOTR=COLON("U.R",
-    TOR,BDIGS,DIGS,EDIGS,RFROM,OVER,SUBBB,SPACS,TYPES,EXITT);
-  int UDOT=COLON("U.", BDIGS,DIGS,EDIGS,SPACE,TYPES,EXITT);
-  int DOT=COLON(".", BASE,AT,DOLIT,10,XORR,IF,UDOT,EXITT,THEN,
-                     STRR,SPACE,TYPES,EXITT);
-  int QUEST=COLON("?", AT,DOT,EXITT);
-  int PARS=COLON("(parse)", TEMP,CSTOR,OVER,TOR,DUPP,IF,
+    TOR,BDIGS,DIGS,EDIGS,RFROM,OVER,SUB,SPACS,TYPES,EXIT);
+  int UDOT=COLON("U.", BDIGS,DIGS,EDIGS,SPACE,TYPES,EXIT);
+  int DOT=COLON(".", BASE,AT,DOLIT,10,XOR,IF,UDOT,EXIT,THEN,
+                     STRR,SPACE,TYPES,EXIT);
+  int QUEST=COLON("?", AT,DOT,EXIT);
+  int PARS=COLON("(parse)", TEMP,CSTORE,OVER,TOR,DUP,IF,
                               ONEM,TEMP,CAT,BLANK,EQUAL,IF,
-                                FOR,BLANK,OVER,CAT,SUBBB,ZLESS,INVER,
+                                FOR,BLANK,OVER,CAT,SUB,ZLESS,INVERSE,
                                   WHILE,ONEP,
                                 NEXT,
-                                RFROM,DROP,DOLIT,0,DUPP,EXITT,
+                                RFROM,DROP,DOLIT,0,DUP,EXIT,
                               THEN,RFROM,
                             THEN,OVER,SWAP,
-                            FOR,TEMP,CAT,OVER,CAT,SUBBB,TEMP,CAT,BLANK,EQUAL,
+                            FOR,TEMP,CAT,OVER,CAT,SUB,TEMP,CAT,BLANK,EQUAL,
                               IF,ZLESS,THEN,
                               WHILE,ONEP,
-                            NEXT,DUPP,TOR,
-                            ELSE,RFROM,DROP,DUPP,ONEP,TOR,
-                            THEN,OVER,SUBBB,RFROM,RFROM,SUBBB,EXITT,
-                            THEN,OVER,RFROM,SUBBB,EXITT);
-  int PACKS=COLON("PACK$", DUPP,TOR,DDUP,PLUS,DOLIT,~CELL_MASK,ANDD,DOLIT,0,SWAP,STORE,DDUP,CSTOR,ONEP,SWAP,CMOVEE,RFROM,EXITT);
-  int PARSE=COLON("PARSE", TOR,TIB,INN,AT,PLUS,NTIB,AT,INN,AT,SUBBB,RFROM,PARS,INN,PSTOR,EXITT);
-  int TOKEN=COLON("TOKEN", BLANK,PARSE,DOLIT,0x1F,MIN,HERE,CELLP,PACKS,EXITT);
-  int WORDD=COLON("WORD", PARSE,HERE,CELLP,PACKS,EXITT);
-  int NAMET=COLON("NAME>", COUNT,DOLIT,0x1F,ANDD,PLUS,ALIGN,EXITT);
-  int SAMEQ=COLON("SAME?", DOLIT,0x1F,ANDD,CELLD,FOR,AFT,
+                            NEXT,DUP,TOR,
+                            ELSE,RFROM,DROP,DUP,ONEP,TOR,
+                            THEN,OVER,SUB,RFROM,RFROM,SUB,EXIT,
+                            THEN,OVER,RFROM,SUB,EXIT);
+  int PACKS=COLON("PACK$", DUP,TOR,DDUP,PLUS,DOLIT,
+    ~CELL_MASK,AND,DOLIT,0,SWAP,STORE,DDUP,CSTORE,ONEP,SWAP,CMOVEE,RFROM,EXIT);
+  int PARSE=COLON("PARSE", TOR,TIB,INN,AT,PLUS,NTIB,AT,INN,AT,SUB,RFROM,
+    PARS,INN,PSTORE,EXIT);
+  int TOKEN=COLON("TOKEN", BLANK,PARSE,DOLIT,0x1F,MIN,HERE,CELLP,PACKS,EXIT);
+  int WORDD=COLON("WORD", PARSE,HERE,CELLP,PACKS,EXIT);
+  int NAMET=COLON("NAME>", COUNT,DOLIT,0x1F,AND,PLUS,ALIGN,EXIT);
+  int SAMEQ=COLON("SAME?", DOLIT,0x1F,AND,CELLD,FOR,AFT,
                              OVER,RAT,CELLS,PLUS,AT,UPPER,OVER,RAT,
-                             CELLS,PLUS,AT,UPPER,SUBBB,QDUP,IF,
-                               RFROM,DROP,EXITT,THEN,
-                           THEN,NEXT,DOLIT,0,EXITT);
-  int FIND=COLON("find", SWAP,DUPP,AT,TEMP,STORE,DUPP,AT,TOR,CELLP,SWAP,
-                         BEGIN,AT,DUPP,IF,
-                           DUPP,AT,DOLIT,~0xC0,ANDD,UPPER,RAT,UPPER,XORR,
+                             CELLS,PLUS,AT,UPPER,SUB,QDUP,IF,
+                               RFROM,DROP,EXIT,THEN,
+                           THEN,NEXT,DOLIT,0,EXIT);
+  int FIND=COLON("find", SWAP,DUP,AT,TEMP,STORE,DUP,AT,TOR,CELLP,SWAP,
+                         BEGIN,AT,DUP,IF,
+                           DUP,AT,DOLIT,~0xC0,AND,UPPER,RAT,UPPER,XOR,
                            IF,CELLP,DOLIT,-1,ELSE,CELLP,TEMP,AT,SAMEQ,THEN,
-                         ELSE,RFROM,DROP,SWAP,CELLM,SWAP,EXITT,THEN,
+                         ELSE,RFROM,DROP,SWAP,CELLM,SWAP,EXIT,THEN,
                          WHILE,CELLM,CELLM,REPEAT,
-                         RFROM,DROP,SWAP,DROP,CELLM,DUPP,NAMET,SWAP,EXITT);
-  int NAMEQ=COLON("NAME?", CNTXT,FIND,EXITT);
-  int EXPEC=COLON("EXPECT", ACCEP,SPAN,STORE,DROP,EXITT);
-  int QUERY=COLON("QUERY", TIB,DOLIT,0x100,ACCEP,NTIB,STORE,DROP,DOLIT,0,INN,STORE,EXITT);
-  int ABORT=COLON("ABORT", NOP,TABRT,ATEXE,EXITT);
+                         RFROM,DROP,SWAP,DROP,CELLM,DUP,NAMET,SWAP,EXIT);
+  int NAMEQ=COLON("NAME?", CNTXT,FIND,EXIT);
+  int EXPEC=COLON("EXPECT", ACCEPT,SPAN,STORE,DROP,EXIT);
+  int QUERY=COLON("QUERY", TIB,DOLIT,0x100,ACCEPT,NTIB,STORE,DROP,
+    DOLIT,0,INN,STORE,EXIT);
+  int ABORT=COLON("ABORT", NOP,TABRT,ATEXE,EXIT);
   ABORQP=COLON("abort\"", IF,DOSTR,COUNT,TYPES,ABORT,THEN,
-                          DOSTR,DROP,EXITT);
-  int ERRORR=COLON("ERROR", SPACE,COUNT,TYPES,DOLIT,'?',EMIT,CR,ABORT,EXITT);
-  int INTER=COLON("$INTERPRET", NAMEQ,QDUP,IF,CAT,DOLIT,COMPO,ANDD,
-                  ABORTQ," compile only",EXECU,EXITT,THEN,NUMBQ,IF,
-                  EXITT,THEN,ERRORR,EXITT);
-  int LBRAC=COLON_IMMEDIATE("[", DOLIT,INTER,TEVAL,STORE,EXITT);
+    DOSTR,DROP,EXIT);
+  int ERRORR=COLON("ERROR", SPACE,COUNT,TYPES,DOLIT,'?',EMIT,CR,ABORT,EXIT);
+  int INTER=COLON("$INTERPRET", NAMEQ,QDUP,IF,CAT,DOLIT,COMPO,AND,
+                  ABORTQ," compile only",EXECUTE,EXIT,THEN,NUMBQ,IF,
+                  EXIT,THEN,ERRORR,EXIT);
+  int LBRAC=COLON_IMMEDIATE("[", DOLIT,INTER,TEVAL,STORE,EXIT);
   int DOTOK=COLON(".OK", CR,DOLIT,INTER,TEVAL,AT,EQUAL,IF,
-                    TOR,TOR,TOR,DUPP,DOT,RFROM,DUPP,DOT,RFROM,DUPP,DOT,
-                    RFROM,DUPP,DOT,DOTQ," ok>",THEN,EXITT);
-  int EVAL=COLON("EVAL", LBRAC,BEGIN,TOKEN,DUPP,AT,WHILE,TEVAL,ATEXE,
-                 REPEAT,DROP,DOTOK,NOP,EXITT);
-  int QUITT=COLON("QUIT", LBRAC,BEGIN,QUERY,EVAL,AGAIN,EXITT);
-  int LOAD=COLON("LOAD", NTIB,STORE,TTIB,STORE,DOLIT,0,INN,STORE,EVAL,EXITT);
-  int COMMA=COLON(",", HERE,DUPP,CELLP,CP,STORE,STORE,EXITT);
-  int LITER=COLON_IMMEDIATE("LITERAL", DOLIT,DOLIT,COMMA,COMMA,EXITT);
-  int ALLOT=COLON("ALLOT", ALIGN,CP,PSTOR,EXITT);
-  int STRCQ=COLON("$,\"", DOLIT,'"',WORDD,COUNT,PLUS,ALIGN,CP,STORE,EXITT);
-  int UNIQU=COLON("?UNIQUE", DUPP,NAMEQ,QDUP,IF,
-                   COUNT,DOLIT,0x1F,ANDD,SPACE,TYPES,DOTQ," reDef",
-                  THEN,DROP,EXITT);
-  int SNAME=COLON("$,n", DUPP,AT,IF,UNIQU,DUPP,NAMET,CP,STORE,DUPP,
-                  LAST,STORE,CELLM,CNTXT,AT,SWAP,STORE,EXITT,THEN,
-                  ERRORR,EXITT);
-  int TICK=COLON("'", TOKEN,NAMEQ,IF,EXITT,THEN,ERRORR,EXITT);
-  int BCOMP=COLON_IMMEDIATE("[COMPILE]", TICK,COMMA,EXITT);
-  int COMPI=COLON("COMPILE", RFROM,DUPP,AT,COMMA,CELLP,TOR,EXITT);
-  int SCOMP=COLON("$COMPILE", NAMEQ,QDUP,IF,AT,DOLIT,IMEDD,ANDD,IF,EXECU,
-                  ELSE,COMMA,THEN,EXITT,THEN,NUMBQ,IF,LITER,EXITT,THEN,
-                  ERRORR,EXITT);
-  int OVERT=COLON("OVERT", LAST,AT,CNTXT,STORE,EXITT);
-  int RBRAC=COLON("]", DOLIT,SCOMP,TEVAL,STORE,EXITT);
-  int COLN=COLON(":", TOKEN,SNAME,RBRAC,DOLIT,as_dolist,COMMA,EXITT);
-  int SEMIS=COLON_IMMEDIATE(";", DOLIT,EXITT,COMMA,LBRAC,OVERT,EXITT);
-  int DMP=COLON("dm+", OVER,DOLIT,6,UDOTR,FOR,AFT,DUPP,AT,DOLIT,9,UDOTR,CELLP,
-    THEN,NEXT,EXITT);
+                    TOR,TOR,TOR,DUP,DOT,RFROM,DUP,DOT,RFROM,DUP,DOT,
+                    RFROM,DUP,DOT,DOTQ," ok>",THEN,EXIT);
+  int EVAL=COLON("EVAL", LBRAC,BEGIN,TOKEN,DUP,AT,WHILE,TEVAL,ATEXE,
+                 REPEAT,DROP,DOTOK,NOP,EXIT);
+  int QUITT=COLON("QUIT", LBRAC,BEGIN,QUERY,EVAL,AGAIN,EXIT);
+  int LOAD=COLON("LOAD", NTIB,STORE,TTIB,STORE,DOLIT,0,INN,STORE,EVAL,EXIT);
+  int COMMA=COLON(",", HERE,DUP,CELLP,CP,STORE,STORE,EXIT);
+  int LITER=COLON_IMMEDIATE("LITERAL", DOLIT,DOLIT,COMMA,COMMA,EXIT);
+  int ALLOT=COLON("ALLOT", ALIGN,CP,PSTORE,EXIT);
+  int STRCQ=COLON("$,\"", DOLIT,'"',WORDD,COUNT,PLUS,ALIGN,CP,STORE,EXIT);
+  int UNIQU=COLON("?UNIQUE", DUP,NAMEQ,QDUP,IF,
+                   COUNT,DOLIT,0x1F,AND,SPACE,TYPES,DOTQ," reDef",
+                  THEN,DROP,EXIT);
+  int SNAME=COLON("$,n", DUP,AT,IF,UNIQU,DUP,NAMET,CP,STORE,DUP,
+                  LAST,STORE,CELLM,CNTXT,AT,SWAP,STORE,EXIT,THEN,
+                  ERRORR,EXIT);
+  int TICK=COLON("'", TOKEN,NAMEQ,IF,EXIT,THEN,ERRORR,EXIT);
+  int BCOMP=COLON_IMMEDIATE("[COMPILE]", TICK,COMMA,EXIT);
+  int COMPI=COLON("COMPILE", RFROM,DUP,AT,COMMA,CELLP,TOR,EXIT);
+  int SCOMP=COLON("$COMPILE", NAMEQ,QDUP,IF,AT,DOLIT,IMEDD,AND,IF,EXECUTE,
+                  ELSE,COMMA,THEN,EXIT,THEN,NUMBQ,IF,LITER,EXIT,THEN,
+                  ERRORR,EXIT);
+  int OVERT=COLON("OVERT", LAST,AT,CNTXT,STORE,EXIT);
+  int RBRAC=COLON("]", DOLIT,SCOMP,TEVAL,STORE,EXIT);
+  int COLN=COLON(":", TOKEN,SNAME,RBRAC,DOLIT,as_DOLIST,COMMA,EXIT);
+  int SEMIS=COLON_IMMEDIATE(";", DOLIT,EXIT,COMMA,LBRAC,OVERT,EXIT);
+  int DMP=COLON("dm+", OVER,DOLIT,6,UDOTR,FOR,AFT,DUP,AT,DOLIT,9,UDOTR,CELLP,
+    THEN,NEXT,EXIT);
   int DUMP=COLON("DUMP", BASE,AT,TOR,HEXX,DOLIT,0x1F,PLUS,DOLIT,0x20,SLASH,
     FOR,AFT,CR,DOLIT,8,DDUP,DMP,TOR,SPACE,CELLS,TYPES,RFROM,THEN,NEXT,
-    DROP,RFROM,BASE,STORE,EXITT);
-  int TNAME=COLON(">NAME", CNTXT,BEGIN,AT,DUPP,WHILE,DDUP,NAMET,XORR,
-    IF,ONEM,ELSE,SWAP,DROP,EXITT,THEN,REPEAT,SWAP,DROP,EXITT);
-  int DOTID=COLON(".ID", COUNT,DOLIT,0x1F,ANDD,TYPES,SPACE,EXITT);
+    DROP,RFROM,BASE,STORE,EXIT);
+  int TNAME=COLON(">NAME", CNTXT,BEGIN,AT,DUP,WHILE,DDUP,NAMET,XOR,
+    IF,ONEM,ELSE,SWAP,DROP,EXIT,THEN,REPEAT,SWAP,DROP,EXIT);
+  int DOTID=COLON(".ID", COUNT,DOLIT,0x1F,AND,TYPES,SPACE,EXIT);
   int WORDS=COLON("WORDS", CR,CNTXT,DOLIT,0,TEMP,STORE,BEGIN,AT,QDUP,
-    WHILE,DUPP,SPACE,DOTID,CELLM,TEMP,AT,DOLIT,0x10,LESS,
-    IF,DOLIT,1,TEMP,PSTOR,ELSE,CR,DOLIT,0,TEMP,STORE,THEN,
-    REPEAT,EXITT);
+    WHILE,DUP,SPACE,DOTID,CELLM,TEMP,AT,DOLIT,0x10,LESS,
+    IF,DOLIT,1,TEMP,PSTORE,ELSE,CR,DOLIT,0,TEMP,STORE,THEN,
+    REPEAT,EXIT);
   int FORGT=COLON("FORGET", TOKEN,NAMEQ,QDUP,IF,
-    CELLM,DUPP,CP,STORE,AT,DUPP,CNTXT,STORE,LAST,STORE,DROP,EXITT,THEN,
-    ERRORR,EXITT);
-  int COLD=COLON("COLD",CR,DOTQ,"esp32forth V6.3, 2019 ",CR,EXITT);
+    CELLM,DUP,CP,STORE,AT,DUP,CNTXT,STORE,LAST,STORE,DROP,EXIT,THEN,
+    ERRORR,EXIT);
+  int COLD=COLON("COLD",CR,DOTQ,"esp32forth V6.3, 2019 ",CR,EXIT);
   int LINE=COLON("LINE",
-    DOLIT,0x7,FOR,DUPP,PEEK,DOLIT,0x9,UDOTR,CELLP,NEXT,EXITT);
+    DOLIT,0x7,FOR,DUP,PEEK,DOLIT,0x9,UDOTR,CELLP,NEXT,EXIT);
   int PP=COLON("PP",
-    FOR,AFT,CR,DUPP,DOLIT,0x9,UDOTR,SPACE,LINE,THEN,NEXT,EXITT);
-  int P0=COLON("P0", DOLIT,0x3FF44004,POKE,EXITT);
-  int P0S=COLON("P0S", DOLIT,0x3FF44008,POKE,EXITT);
-  int P0C=COLON("P0C", DOLIT,0x3FF4400C,POKE,EXITT);
-  int P1=COLON("P1", DOLIT,0x3FF44010,POKE,EXITT);
-  int P1S=COLON("P1S", DOLIT,0x3FF44014,POKE,EXITT);
-  int P1C=COLON("P1C", DOLIT,0x3FF44018,POKE,EXITT);
-  int P0EN=COLON("P0EN", DOLIT,0x3FF44020,POKE,EXITT);
-  int P0ENS=COLON("P0ENS", DOLIT,0x3FF44024,POKE,EXITT);
-  int P0ENC=COLON("P0ENC", DOLIT,0x3FF44028,POKE,EXITT);
-  int P1EN=COLON("P1EN", DOLIT,0x3FF4402C,POKE,EXITT);
-  int P1ENS=COLON("P1ENS", DOLIT,0x3FF44030,POKE,EXITT);
-  int P1ENC=COLON("P1ENC", DOLIT,0x3FF44034,POKE,EXITT);
-  int P0IN=COLON("P0IN", DOLIT,0x3FF4403C,PEEK,DOT,EXITT);
-  int P1IN=COLON("P1IN", DOLIT,0x3FF44040,PEEK,DOT,EXITT);
-  int PPP=COLON("PPP", DOLIT,0x3FF44000,DOLIT,3,PP,DROP,EXITT);
+    FOR,AFT,CR,DUP,DOLIT,0x9,UDOTR,SPACE,LINE,THEN,NEXT,EXIT);
+  int P0=COLON("P0", DOLIT,0x3FF44004,POKE,EXIT);
+  int P0S=COLON("P0S", DOLIT,0x3FF44008,POKE,EXIT);
+  int P0C=COLON("P0C", DOLIT,0x3FF4400C,POKE,EXIT);
+  int P1=COLON("P1", DOLIT,0x3FF44010,POKE,EXIT);
+  int P1S=COLON("P1S", DOLIT,0x3FF44014,POKE,EXIT);
+  int P1C=COLON("P1C", DOLIT,0x3FF44018,POKE,EXIT);
+  int P0EN=COLON("P0EN", DOLIT,0x3FF44020,POKE,EXIT);
+  int P0ENS=COLON("P0ENS", DOLIT,0x3FF44024,POKE,EXIT);
+  int P0ENC=COLON("P0ENC", DOLIT,0x3FF44028,POKE,EXIT);
+  int P1EN=COLON("P1EN", DOLIT,0x3FF4402C,POKE,EXIT);
+  int P1ENS=COLON("P1ENS", DOLIT,0x3FF44030,POKE,EXIT);
+  int P1ENC=COLON("P1ENC", DOLIT,0x3FF44034,POKE,EXIT);
+  int P0IN=COLON("P0IN", DOLIT,0x3FF4403C,PEEK,DOT,EXIT);
+  int P1IN=COLON("P1IN", DOLIT,0x3FF44040,PEEK,DOT,EXIT);
+  int PPP=COLON("PPP", DOLIT,0x3FF44000,DOLIT,3,PP,DROP,EXIT);
   int EMITT=COLON("EMITT", DOLIT,0x3,FOR,DOLIT,0,DOLIT,0x100,MSMOD,SWAP,
-    TCHAR,EMIT,NEXT,DROP,EXITT);
-  int TYPEE=COLON("TYPEE", SPACE,DOLIT,0x7,FOR,DUPP,PEEK,EMITT,CELLP,NEXT,
-    DROP,EXITT);
-  int PPPP=COLON("PPPP", FOR,AFT,CR,DUPP,DUPP,DOLIT,0x9,UDOTR,SPACE,LINE,
-    SWAP,TYPEE,THEN,NEXT,EXITT);
-  int KKK=COLON("KKK", DOLIT,0x3FF59000,DOLIT,0x10,PP,DROP,EXITT);
-  int THENN=COLON_IMMEDIATE("THEN", HERE,SWAP,STORE,EXITT);
-  int FORR=COLON_IMMEDIATE("FOR", COMPI,TOR,HERE,EXITT);
-  int BEGIN=COLON_IMMEDIATE("BEGIN", HERE,EXITT);
-  int NEXT=COLON_IMMEDIATE("NEXT", COMPI,DONXT,COMMA,EXITT);
-  int UNTIL=COLON_IMMEDIATE("UNTIL", COMPI,QBRAN,COMMA,EXITT);
-  int AGAIN=COLON_IMMEDIATE("AGAIN", COMPI,BRAN,COMMA,EXITT);
-  int IFF=COLON_IMMEDIATE("IF", COMPI,QBRAN,HERE,DOLIT,0,COMMA,EXITT);
-  int AHEAD=COLON_IMMEDIATE("AHEAD", COMPI,BRAN,HERE,DOLIT,0,COMMA,EXITT);
-  int REPEA=COLON_IMMEDIATE("REPEAT", AGAIN,THENN,EXITT);
-  int AFT=COLON_IMMEDIATE("AFT", DROP,AHEAD,HERE,SWAP,EXITT);
-  int ELSEE=COLON_IMMEDIATE("ELSE", AHEAD,SWAP,THENN,EXITT);
-  int WHILEE=COLON_IMMEDIATE("WHILE", IFF,SWAP,EXITT);
-  int ABRTQ=COLON_IMMEDIATE("ABORT\"", DOLIT,ABORQP,HERE,STORE,STRCQ,EXITT);
-  int STRQ=COLON_IMMEDIATE("$\"", DOLIT,STRQP,HERE,STORE,STRCQ,EXITT);
-  int DOTQQ=COLON_IMMEDIATE(".\"", DOLIT,DOTQP,HERE,STORE,STRCQ,EXITT);
-  int CODE=COLON("CODE", TOKEN,SNAME,OVERT,HERE,ALIGN,CP,STORE,EXITT);
-  int CREAT=COLON("CREATE", CODE,DOLIT,as_dovar + (as_next << 8),COMMA,EXITT);
-  int VARIA=COLON("VARIABLE", CREAT,DOLIT,0,COMMA,EXITT);
-  int CONST=COLON("CONSTANT", CODE,DOLIT,as_docon + (as_next << 8),COMMA,COMMA,EXITT);
-  int DOTPR=COLON_IMMEDIATE(".(", DOLIT,')',PARSE,TYPES,EXITT);
-  int BKSLA=COLON_IMMEDIATE("\\", DOLIT,'\n',WORDD,DROP,EXITT);
-  int PAREN=COLON_IMMEDIATE("(", DOLIT,')',PARSE,DDROP,EXITT);
-  int ONLY=COLON_IMMEDIATE("COMPILE-ONLY", DOLIT,COMPO,LAST,AT,PSTOR,EXITT);
-  int IMMED=COLON("IMMEDIATE", DOLIT,IMEDD,LAST,AT,PSTOR,EXITT);
+    TCHAR,EMIT,NEXT,DROP,EXIT);
+  int TYPEE=COLON("TYPEE", SPACE,DOLIT,0x7,FOR,DUP,PEEK,EMITT,CELLP,NEXT,
+    DROP,EXIT);
+  int PPPP=COLON("PPPP", FOR,AFT,CR,DUP,DUP,DOLIT,0x9,UDOTR,SPACE,LINE,
+    SWAP,TYPEE,THEN,NEXT,EXIT);
+  int KKK=COLON("KKK", DOLIT,0x3FF59000,DOLIT,0x10,PP,DROP,EXIT);
+  int THENN=COLON_IMMEDIATE("THEN", HERE,SWAP,STORE,EXIT);
+  int FOR=COLON_IMMEDIATE("FOR", COMPI,TOR,HERE,EXIT);
+  int BEGIN=COLON_IMMEDIATE("BEGIN", HERE,EXIT);
+  int NEXT=COLON_IMMEDIATE("NEXT", COMPI,DONEXT,COMMA,EXIT);
+  int UNTIL=COLON_IMMEDIATE("UNTIL", COMPI,QBRANCH,COMMA,EXIT);
+  int AGAIN=COLON_IMMEDIATE("AGAIN", COMPI,BRANCH,COMMA,EXIT);
+  int IFF=COLON_IMMEDIATE("IF", COMPI,QBRANCH,HERE,DOLIT,0,COMMA,EXIT);
+  int AHEAD=COLON_IMMEDIATE("AHEAD", COMPI,BRANCH,HERE,DOLIT,0,COMMA,EXIT);
+  int REPEA=COLON_IMMEDIATE("REPEAT", AGAIN,THENN,EXIT);
+  int AFT=COLON_IMMEDIATE("AFT", DROP,AHEAD,HERE,SWAP,EXIT);
+  int ELSEE=COLON_IMMEDIATE("ELSE", AHEAD,SWAP,THENN,EXIT);
+  int WHILEE=COLON_IMMEDIATE("WHILE", IFF,SWAP,EXIT);
+  int ABRTQ=COLON_IMMEDIATE("ABORT\"", DOLIT,ABORQP,HERE,STORE,STRCQ,EXIT);
+  int STRQ=COLON_IMMEDIATE("$\"", DOLIT,STRQP,HERE,STORE,STRCQ,EXIT);
+  int DOTQQ=COLON_IMMEDIATE(".\"", DOLIT,DOTQP,HERE,STORE,STRCQ,EXIT);
+  int CODE=COLON("CODE", TOKEN,SNAME,OVERT,HERE,ALIGN,CP,STORE,EXIT);
+  int CREAT=COLON("CREATE", CODE,DOLIT,as_DOVAR + (as_NEXTT << 8),COMMA,EXIT);
+  int VARIA=COLON("VARIABLE", CREAT,DOLIT,0,COMMA,EXIT);
+  int CONST=COLON("CONSTANT", CODE,DOLIT,as_DOCON + (as_NEXTT << 8),
+    COMMA,COMMA,EXIT);
+  int DOTPR=COLON_IMMEDIATE(".(", DOLIT,')',PARSE,TYPES,EXIT);
+  int BKSLA=COLON_IMMEDIATE("\\", DOLIT,'\n',WORDD,DROP,EXIT);
+  int PAREN=COLON_IMMEDIATE("(", DOLIT,')',PARSE,DDROP,EXIT);
+  int ONLY=COLON_IMMEDIATE("COMPILE-ONLY", DOLIT,COMPO,LAST,AT,PSTORE,EXIT);
+  int IMMED=COLON("IMMEDIATE", DOLIT,IMEDD,LAST,AT,PSTORE,EXIT);
   int ENDD=IP;
 #if DEBUG_COREWORDS
   printf("\n");
@@ -832,7 +776,7 @@ int main(void) {
 #endif
   IP = 0x60 * sizeof(cell_t);
   int USER=LABEL(18,
-                 as_dolist,EVAL,0,0,
+                 as_DOLIST,EVAL,0,0,
                  0,  // HLD
                  0,  // SPAN
                  0,  // >IN
