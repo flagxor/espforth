@@ -280,7 +280,7 @@ static void mspause(cell_t ms) {
     (rack[(unsigned char)R] -= 1, IP = data[IP/sizeof(cell_t)]); \
     else (IP += sizeof(cell_t), R--); next()) \
   X(qbran, if(top == 0) IP = data[IP/sizeof(cell_t)]; \
-    else (IP += sizeof(cell_t), pop); next()) \
+    else IP += sizeof(cell_t); pop; next()) \
   X(bran, IP = data[IP/sizeof(cell_t)]; next()) \
   X(store, data[top/sizeof(cell_t)] = stack[(unsigned char)S--]; pop) \
   X(at, top = data[top/sizeof(cell_t)]) \
@@ -476,9 +476,12 @@ void evaluate()
   for(;;) {
     unsigned char bytecode = cData[P++];
 #if 0
-    printf("%d: %d %d %d | %d %d %d\n",
-      bytecode, (int)stack[0], (int)stack[1], (int)stack[2],
-      (int)rack[0], (int)rack[1], (int)rack[2]);
+    printf("[%d]%d: [%d] %d %d %d %d %d | [%d] %d %d %d %d %d\n",
+      (int)P, bytecode,
+      (int)S,
+      (int)stack[0], (int)stack[1], (int)stack[2], (int)stack[3], (int)stack[4],
+      (int)R,
+      (int)rack[0], (int)rack[1], (int)rack[2], (int)rack[3], (int)rack[4]);
 #endif
     if (bytecode) primitives[bytecode]();
     else break;
