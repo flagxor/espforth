@@ -8,6 +8,11 @@
 #include <stdint.h>
 #include <inttypes.h>
 
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #ifdef esp32
 #  include "freertos/FreeRTOS.h"
 #  include "freertos/task.h"
@@ -56,7 +61,7 @@ static cell_t rack[256] = {0}, stack[256] = {0};
 static unsigned char R=0, S=0;
 static cell_t *Pointer;
 static cell_t P, IP, WP, top, links;
-static dcell_t d, n, m ;
+static dcell_t d, n, m;
 static cell_t data[16000] = {};
 static uint8_t *cData = (uint8_t *) data;
 static const int IMEDD=0x80;
@@ -186,9 +191,30 @@ static const int COMPO=0x40;
   X("DUTY", DUTY, WP = top; pop; /* ledcAnalogWrite(WP,top,255); */ pop) \
   X("FREQ", FREQ, WP = top; pop; /* ledcSetup(WP,top,13); */ pop) \
   X("MS", MS, WP = top; pop; mspause(WP)) \
-  X("TERMINATE", TERMINATE, exit(top))
+  X("TERMINATE", TERMINATE, exit(top)) \
+  /* File words */ \
+  X("r/o", R_O, push O_RDONLY) \
+  X("r/w", R_W, push O_RDWR) \
+  X("w/o", W_O, push O_WRONLY) \
+  X("bin", BIN, ) \
+  X("close-file", CLOSE_FILE, top = close(top); top = top ? errno : 0) \
+  X("open-file", OPEN_FILE, cell_t mode = top; pop; cell_t len = top; pop; \
+    memcpy(filename, &cData[top], len); filename[len] = 0; \
+    mode_t mask = umask(0); umask(mask); \
+    top = open(filename, mode, mask); push top < 0 ? errno : 0) \
+  X("create-file", CREATE_FILE, cell_t mode = top; pop; cell_t len = top; pop; \
+    memcpy(filename, &cData[top], len); filename[len] = 0; \
+    top = open(filename, mode | O_CREAT | O_TRUNC); push top < 0 ? errno : 0) \
+  X("delete-file", DELETE_FILE, cell_t len = top; pop; \
+    memcpy(filename, &cData[top], len); filename[len] = 0; \
+    top = unlink(filename); top = top ? errno : 0) \
+  X("write-file", WRITE_FILE, cell_t fd = top; pop; cell_t len = top; pop; \
+    top = write(fd, &cData[top], len); top = top != len ? errno : 0) \
+  X("read-file", READ_FILE, cell_t fd = top; pop; cell_t len = top; pop; \
+    top = read(fd, &cData[top], len); push top != len ? errno : 0) \
 
 static int ABORQP=0, DOTQP=0, STRQP = 0, COLD = 0;
+static char filename[4096];
 #define X(sname, name, code) static int name = 0;
   PRIMITIVE_LIST
 #undef X
