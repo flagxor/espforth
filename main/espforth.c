@@ -212,6 +212,14 @@ static const int COMPO=0x40;
     top = write(fd, &cData[top], len); top = top != len ? errno : 0) \
   X("read-file", READ_FILE, cell_t fd = top; pop; cell_t len = top; pop; \
     top = read(fd, &cData[top], len); push top != len ? errno : 0) \
+  X("file-position", FILE_POSITION, \
+    top = (cell_t) lseek(top, 0, SEEK_CUR); push top < 0 ? errno : 0) \
+  X("reposition-file", REPOSITION_FILE, cell_t fd = top; pop; \
+    top = (cell_t) lseek(fd, top, SEEK_SET); top = top < 0 ? errno : 0) \
+  X("resize-file", RESIZE_FILE, cell_t fd = top; pop; \
+    top = ftruncate(fd, top); top = top < 0 ? errno : 0) \
+  X("file-size", FILE_SIZE, struct stat st; WP = fstat(top, &st); \
+    top = (cell_t) st.st_size; push WP < 0 ? errno : 0) \
 
 static int ABORQP=0, DOTQP=0, STRQP = 0, COLD = 0;
 static char filename[4096];
