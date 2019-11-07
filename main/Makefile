@@ -1,5 +1,5 @@
 # For native
-CFLAGS=-g
+CFLAGS=-g -Wall -Werror
 
 all: espforth
 
