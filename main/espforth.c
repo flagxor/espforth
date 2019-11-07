@@ -77,19 +77,19 @@ typedef uint64_t udcell_t;
 #define PRIxCELL PRIxPTR
 #define CELL_MASK (sizeof(cell_t)-1)
 
-# define  FALSE 0
-# define  TRUE  -1
-# define  LOGICAL ? TRUE : FALSE
-# define  LOWER(x,y) ((ucell_t)(x)<(ucell_t)(y))
-# define  pop top = stack[(unsigned char)S--]
-# define  push stack[(unsigned char)++S] = top; top =
-# define  popR rack[(unsigned char)R--]
-# define  pushR rack[(unsigned char)++R]
+#define  FALSE 0
+#define  TRUE  -1
+#define  LOGICAL ? TRUE : FALSE
+#define  LOWER(x,y) ((ucell_t)(x)<(ucell_t)(y))
+#define  pop top = stack[(unsigned char)S--]
+#define  push stack[(unsigned char)++S] = top; top =
+#define  popR rack[(unsigned char)R--]
+#define  pushR rack[(unsigned char)++R]
 
 static cell_t rack[256] = {0}, stack[256] = {0};
 static unsigned char R=0, S=0;
 static cell_t* Pointer;
-static cell_t  P, IP, WP, top, links, len;
+static cell_t  P, IP, WP, top, links;
 static uint8_t* cData;
 static dcell_t d, n, m ;
 static cell_t data[16000] = {};
@@ -98,7 +98,7 @@ static const int COMPO=0x40;
 
 #define PRIMITIVE_LIST \
   X("NOP", NOP, next()) \
-  X("ACCEPT", ACCEPT, len = duplexread(cData, top); top = len) \
+  X("ACCEPT", ACCEPT, top = duplexread(cData, top)) \
   X("?KEY", QKEY, push fgetc(stdin); push -1) \
   X("EMIT", EMIT, char c=top; fputc(c, stdout); pop) \
   X("DOCON", DOCON, push data[WP/sizeof(cell_t)]) \
@@ -274,28 +274,6 @@ static void Comma(cell_t n) {
   P=IP/sizeof(cell_t);
   data[P++] = n;
   IP=P*sizeof(cell_t);
-}
-
-static int LABEL(int len, ... ) {
-  int addr=IP;
-  P=IP/sizeof(cell_t);
-  va_list argList;
-  va_start(argList, len);
-#if DEBUG_COREWORDS
-  printf("\n");
-  printf("%x", addr);
-#endif
-  for(; len;len--) {
-    int j=va_arg(argList, int);
-    data[P++]=j;
-#if DEBUG_COREWORDS
-    printf(" ");
-    printf("%x", j);
-#endif
-  }
-  IP=P*sizeof(cell_t);
-  va_end(argList);
-  return addr;
 }
 
 #define STR_LIKE(op) \
@@ -477,6 +455,22 @@ static int CONSTANT(const char *name, cell_t n) {
   return ret;
 }
 
+static int BUFFER(const char *name, cell_t len) {
+  int ret = CODE(name, as_DOVAR, as_NEXTT);
+  IP += len;
+  return ret;
+}
+
+static int VARIABLE(const char *name) {
+  int ret = CODE(name, as_DOVAR, as_NEXTT);
+  Comma(0);
+  return ret;
+}
+
+static void SET_VAR(cell_t addr, cell_t value) {
+  data[addr/sizeof(cell_t) + 1] = value;
+}
+
 static void run() {
   P = COLD;
   WP = P + sizeof(cell_t);
@@ -496,32 +490,27 @@ int main(void) {
 #else
   SetupTerminal();
 #endif
-  P = 0x60 * sizeof(cell_t);
-  WP = P + sizeof(cell_t);
-  IP = 0;
   S = 0;
   R = 0;
   top = 0;
   cData = (uint8_t *) data;
-
-  IP=128 * sizeof(cell_t);
+  IP = 128 * sizeof(cell_t);
+  links = 0;
   cell_t datap = 0x64 * sizeof(cell_t) - sizeof(cell_t);
-  R=0;
-  int HLD=CONSTANT("HLD", datap += sizeof(cell_t));
-  int SPAN=CONSTANT("SPAN", datap += sizeof(cell_t));
-  int INN=CONSTANT(">IN", datap += sizeof(cell_t));
-  int NTIB=CONSTANT("#TIB", datap += sizeof(cell_t));
-  int TTIB=CONSTANT("'TIB", datap += sizeof(cell_t));
-  int BASE=CONSTANT("BASE", datap += sizeof(cell_t));
-  int CNTXT=CONSTANT("CONTEXT", datap += sizeof(cell_t));
-  int CP=CONSTANT("CP", datap += sizeof(cell_t));
-  int LAST=CONSTANT("LAST", datap += sizeof(cell_t));
-  int TEVAL=CONSTANT("'EVAL", datap += sizeof(cell_t));
-  int TABRT=CONSTANT("'ABORT", datap += sizeof(cell_t));
-  int TEMP=CONSTANT("tmp", datap += sizeof(cell_t));
-  int Z=CONSTANT("Z", 0);
-  int PPQN=CONSTANT("ppqn", datap += sizeof(cell_t));
-  int CHANN=CONSTANT("channel", datap += sizeof(cell_t));
+
+  int TTIB=BUFFER("'TIB", 0x100);
+  int CONTEXT=VARIABLE("CONTEXT");
+  int CP=VARIABLE("CP");
+  int LAST=VARIABLE("LAST");
+  int TEVAL=VARIABLE("'EVAL");
+  int TABORT=VARIABLE("'ABORT");
+  int HLD=VARIABLE("HLD");
+  int SPAN=VARIABLE("SPAN");
+  int INN=VARIABLE(">IN");
+  int NTIB=VARIABLE("#TIB");
+  int TEMP=VARIABLE("tmp");
+  int BASE=VARIABLE("BASE");
+  SET_VAR(BASE, 10); 
 
 #define X(sname, name, code) name = CODE(sname, as_ ## name, as_NEXTT);
   PRIMITIVE_LIST
@@ -634,11 +623,11 @@ int main(void) {
                          ELSE,RFROM,DROP,SWAP,CELLM,SWAP,EXIT,THEN,
                          WHILE,CELLM,CELLM,REPEAT,
                          RFROM,DROP,SWAP,DROP,CELLM,DUP,NAMET,SWAP,EXIT);
-  int NAMEQ=COLON("NAME?", CNTXT,FIND,EXIT);
+  int NAMEQ=COLON("NAME?", CONTEXT,FIND,EXIT);
   int EXPEC=COLON("EXPECT", ACCEPT,SPAN,STORE,DROP,EXIT);
   int QUERY=COLON("QUERY", TIB,DOLIT,0x100,ACCEPT,NTIB,STORE,DROP,
     DOLIT,0,INN,STORE,EXIT);
-  int ABORT=COLON("ABORT", NOP,TABRT,ATEXE,EXIT);
+  int ABORT=COLON("ABORT", NOP,TABORT,ATEXE,EXIT);
   ABORQP=COLON("abort\"", IF,DOSTR,COUNT,TYPES,ABORT,THEN,
     DOSTR,DROP,EXIT);
   int ERRORR=COLON("ERROR", SPACE,COUNT,TYPES,DOLIT,'?',EMIT,CR,ABORT,EXIT);
@@ -648,7 +637,7 @@ int main(void) {
   int LBRAC=COLON_IMMEDIATE("[", DOLIT,INTER,TEVAL,STORE,EXIT);
   int DOTOK=COLON(".OK", CR,DOLIT,INTER,TEVAL,AT,EQUAL,IF,
                     TOR,TOR,TOR,DUP,DOT,RFROM,DUP,DOT,RFROM,DUP,DOT,
-                    RFROM,DUP,DOT,DOTQ," ok>",THEN,EXIT);
+                    RFROM,DUP,DOT,DOTQ," ok> ",THEN,EXIT);
   int EVAL=COLON("EVAL", LBRAC,BEGIN,TOKEN,DUP,AT,WHILE,TEVAL,ATEXE,
                  REPEAT,DROP,DOTOK,NOP,EXIT);
   int QUIT=COLON("QUIT", LBRAC,BEGIN,QUERY,EVAL,AGAIN,EXIT);
@@ -661,7 +650,7 @@ int main(void) {
                    COUNT,DOLIT,0x1F,AND,SPACE,TYPES,DOTQ," reDef",
                   THEN,DROP,EXIT);
   int SNAME=COLON("$,n", DUP,AT,IF,UNIQU,DUP,NAMET,CP,STORE,DUP,
-                  LAST,STORE,CELLM,CNTXT,AT,SWAP,STORE,EXIT,THEN,
+                  LAST,STORE,CELLM,CONTEXT,AT,SWAP,STORE,EXIT,THEN,
                   ERRORR,EXIT);
   int TICK=COLON("'", TOKEN,NAMEQ,IF,EXIT,THEN,ERRORR,EXIT);
   int BCOMP=COLON_IMMEDIATE("[COMPILE]", TICK,COMMA,EXIT);
@@ -669,7 +658,7 @@ int main(void) {
   int SCOMP=COLON("$COMPILE", NAMEQ,QDUP,IF,AT,DOLIT,IMEDD,AND,IF,EXECUTE,
                   ELSE,COMMA,THEN,EXIT,THEN,NUMBQ,IF,LITER,EXIT,THEN,
                   ERRORR,EXIT);
-  int OVERT=COLON("OVERT", LAST,AT,CNTXT,STORE,EXIT);
+  int OVERT=COLON("OVERT", LAST,AT,CONTEXT,STORE,EXIT);
   int RBRAC=COLON("]", DOLIT,SCOMP,TEVAL,STORE,EXIT);
   int COLN=COLON(":", TOKEN,SNAME,RBRAC,DOLIT,as_DOLIST,COMMA,EXIT);
   int SEMIS=COLON_IMMEDIATE(";", DOLIT,EXIT,COMMA,LBRAC,OVERT,EXIT);
@@ -678,15 +667,15 @@ int main(void) {
   int DUMP=COLON("DUMP", BASE,AT,TOR,HEXX,DOLIT,0x1F,PLUS,DOLIT,0x20,SLASH,
     FOR,AFT,CR,DOLIT,8,DDUP,DMP,TOR,SPACE,CELLS,TYPES,RFROM,THEN,NEXT,
     DROP,RFROM,BASE,STORE,EXIT);
-  int TNAME=COLON(">NAME", CNTXT,BEGIN,AT,DUP,WHILE,DDUP,NAMET,XOR,
+  int TNAME=COLON(">NAME", CONTEXT,BEGIN,AT,DUP,WHILE,DDUP,NAMET,XOR,
     IF,ONEM,ELSE,SWAP,DROP,EXIT,THEN,REPEAT,SWAP,DROP,EXIT);
   int DOTID=COLON(".ID", COUNT,DOLIT,0x1F,AND,TYPES,SPACE,EXIT);
-  int WORDS=COLON("WORDS", CR,CNTXT,DOLIT,0,TEMP,STORE,BEGIN,AT,QDUP,
+  int WORDS=COLON("WORDS", CR,CONTEXT,DOLIT,0,TEMP,STORE,BEGIN,AT,QDUP,
     WHILE,DUP,SPACE,DOTID,CELLM,TEMP,AT,DOLIT,8,LESS,
     IF,DOLIT,1,TEMP,PSTORE,ELSE,CR,DOLIT,0,TEMP,STORE,THEN,
     REPEAT,EXIT);
   int FORGT=COLON("FORGET", TOKEN,NAMEQ,QDUP,IF,
-    CELLM,DUP,CP,STORE,AT,DUP,CNTXT,STORE,LAST,STORE,DROP,EXIT,THEN,
+    CELLM,DUP,CP,STORE,AT,DUP,CONTEXT,STORE,LAST,STORE,DROP,EXIT,THEN,
     ERRORR,EXIT);
   COLD=COLON(
     "COLD",DOTQ,"AIBOT ESP32 Forth",CR,DOTOK,BEGIN,QUIT,AGAIN,EXIT);
@@ -741,7 +730,12 @@ int main(void) {
   int PAREN=COLON_IMMEDIATE("(", DOLIT,')',PARSE,DDROP,EXIT);
   int ONLY=COLON_IMMEDIATE("COMPILE-ONLY", DOLIT,COMPO,LAST,AT,PSTORE,EXIT);
   int IMMED=COLON("IMMEDIATE", DOLIT,IMEDD,LAST,AT,PSTORE,EXIT);
-  int ENDD=IP;
+  SET_VAR(CP, IP);
+  SET_VAR(TEVAL, INTER);
+  SET_VAR(TABORT, EVAL);
+  SET_VAR(CONTEXT, IMMED - WithPadding(10));
+  SET_VAR(LAST, IMMED - WithPadding(10));
+
 #if DEBUG_COREWORDS
   printf("\n");
   printf("IP=");
@@ -749,22 +743,6 @@ int main(void) {
   printf(" R-stack= ");
   printf("%" PRIxCELL, popR*sizeof(cell_t));
 #endif
-  IP = 0x64 * sizeof(cell_t);
-  int USER=LABEL(14,
-                 0,  // HLD
-                 0,  // SPAN
-                 0,  // >IN
-                 0,  // #TIB
-                 0,  // 'TIB
-                 10,  // BASE
-                 IMMED-WithPadding(10), // CONTEXT
-                 ENDD,  // CP
-                 IMMED-WithPadding(10), // LAST
-                 INTER,  // 'EVAL
-                 EVAL,  // 'ABORT
-                 0,  // tmp
-                 0,  // ppqn
-                 0);  // channel
 
 #if DEBUG_COREWORDS
   // dump dictionary
