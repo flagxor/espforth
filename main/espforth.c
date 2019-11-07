@@ -1,4 +1,4 @@
-// AIBOT esp32 Forth, based on Version 6.3 by CH Ting
+// AIBOT ESP32 Forth, based on Version 6.3 by CH Ting
 
 #include <assert.h>
 #include <stdio.h>
@@ -23,40 +23,6 @@
 #  include <unistd.h>
 #endif
 
-#ifdef esp32
-esp_err_t example_configure_stdin_stdout(void)
-{
-    // Initialize VFS & UART so we can use std::cout/cin
-    setvbuf(stdin, NULL, _IONBF, 0);
-    setvbuf(stdout, NULL, _IONBF, 0);
-    /* Install UART driver for interrupt-driven reads and writes */
-    ESP_ERROR_CHECK( uart_driver_install( (uart_port_t)CONFIG_CONSOLE_UART_NUM,
-            256, 0, 0, NULL, 0) );
-    /* Tell VFS to use UART driver */
-    esp_vfs_dev_uart_use_driver(CONFIG_CONSOLE_UART_NUM);
-    esp_vfs_dev_uart_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
-    /* Move the caret to the beginning of the next line on '\n' */
-    esp_vfs_dev_uart_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
-    return ESP_OK;
-}
-#else
-static struct termios terminalOld;
-static void RestoreTerminal(void) {
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminalOld);
-}
-static void SetupTerminal(void) {
-  setvbuf(stdin, NULL, _IONBF, 0);
-  setvbuf(stdout, NULL, _IONBF, 0);
-
-  tcgetattr(STDIN_FILENO, &terminalOld);
-  atexit(RestoreTerminal);
-  struct termios t = terminalOld;
-  t.c_lflag &= ~ECHO;
-  t.c_lflag &= ~ICANON;
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &t);
-}
-#endif
-
 #define DEBUG_COREWORDS 0
 
 typedef intptr_t cell_t;
@@ -77,22 +43,22 @@ typedef uint64_t udcell_t;
 #define PRIxCELL PRIxPTR
 #define CELL_MASK (sizeof(cell_t)-1)
 
-#define  FALSE 0
-#define  TRUE  -1
-#define  LOGICAL ? TRUE : FALSE
-#define  LOWER(x,y) ((ucell_t)(x)<(ucell_t)(y))
-#define  pop top = stack[(unsigned char)S--]
-#define  push stack[(unsigned char)++S] = top; top =
-#define  popR rack[(unsigned char)R--]
-#define  pushR rack[(unsigned char)++R]
+#define FALSE 0
+#define TRUE -1
+#define LOGICAL ? TRUE : FALSE
+#define LOWER(x,y) ((ucell_t)(x)<(ucell_t)(y))
+#define pop top = stack[(unsigned char)S--]
+#define push stack[(unsigned char)++S] = top; top =
+#define popR rack[(unsigned char)R--]
+#define pushR rack[(unsigned char)++R]
 
 static cell_t rack[256] = {0}, stack[256] = {0};
 static unsigned char R=0, S=0;
-static cell_t* Pointer;
-static cell_t  P, IP, WP, top, links;
-static uint8_t* cData;
+static cell_t *Pointer;
+static cell_t P, IP, WP, top, links;
 static dcell_t d, n, m ;
 static cell_t data[16000] = {};
+static uint8_t *cData = (uint8_t *) data;
 static const int IMEDD=0x80;
 static const int COMPO=0x40;
 
@@ -265,10 +231,6 @@ static void HEADER_IMMEDIATE(const char *name) {
   HEADER_WITH_FLAGS(IMEDD, name);
 }
 
-static int WithPadding(int sz) {
-  return (sz + CELL_MASK) & ~CELL_MASK;
-}
-
 static void Comma(cell_t n) {
   assert(IP % sizeof(cell_t) == 0);
   P=IP/sizeof(cell_t);
@@ -312,15 +274,17 @@ MACRO_LIST
 };
 
 static void CheckSum() {
-  int i;
-  unsigned char sum=0;
   printf("\n");
-  printf("%04" PRIxCELL " ",IP);
-  for (i=0;i<32;i++) {
-    sum += cData[IP];
-    printf("%02x",cData[IP++]);
+  unsigned char sum = 0;
+  for (cell_t i = 0; i < IP;) {
+    printf("%04" PRIxCELL " ", i);
+    for (int j = 0; j < 32; ++j) {
+      sum += cData[i];
+      printf("%02x",cData[i++]);
+    }
+    printf(" %02x\n",sum);
   }
-  printf(" %02x",sum);
+  printf("\n");
 }
 
 /******************************************************************************/
@@ -423,10 +387,10 @@ int COLON_WITH_FLAGS(int flags, const char *name, ...) {
   printf(" ");
   printf("6");
 #endif
-  int last=0, word=0, i, k;
+  int prev_word=0, word=0, i, k;
   const char *str;
   do {
-    last = word;
+    prev_word = word;
     word = va_arg(argList, int);
     switch (word) {
 #define X(name, code) case name: { code; } break;
@@ -440,7 +404,7 @@ int COLON_WITH_FLAGS(int flags, const char *name, ...) {
 #endif
        break;
     }
-  } while (word != EXIT || R > 0 || last == DOLIT);
+  } while (word != EXIT || R > 0 || prev_word == DOLIT);
   IP=P*sizeof(cell_t);
   va_end(argList);
   return addr;
@@ -481,6 +445,40 @@ static void run() {
 }
 
 #ifdef esp32
+esp_err_t example_configure_stdin_stdout(void)
+{
+    // Initialize VFS & UART so we can use std::cout/cin
+    setvbuf(stdin, NULL, _IONBF, 0);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    /* Install UART driver for interrupt-driven reads and writes */
+    ESP_ERROR_CHECK( uart_driver_install( (uart_port_t)CONFIG_CONSOLE_UART_NUM,
+            256, 0, 0, NULL, 0) );
+    /* Tell VFS to use UART driver */
+    esp_vfs_dev_uart_use_driver(CONFIG_CONSOLE_UART_NUM);
+    esp_vfs_dev_uart_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+    /* Move the caret to the beginning of the next line on '\n' */
+    esp_vfs_dev_uart_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+    return ESP_OK;
+}
+#else
+static struct termios terminalOld;
+static void RestoreTerminal(void) {
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminalOld);
+}
+static void SetupTerminal(void) {
+  setvbuf(stdin, NULL, _IONBF, 0);
+  setvbuf(stdout, NULL, _IONBF, 0);
+
+  tcgetattr(STDIN_FILENO, &terminalOld);
+  atexit(RestoreTerminal);
+  struct termios t = terminalOld;
+  t.c_lflag &= ~ECHO;
+  t.c_lflag &= ~ICANON;
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &t);
+}
+#endif
+
+#ifdef esp32
 void app_main(void) {
 #else
 int main(void) {
@@ -493,10 +491,8 @@ int main(void) {
   S = 0;
   R = 0;
   top = 0;
-  cData = (uint8_t *) data;
-  IP = 128 * sizeof(cell_t);
   links = 0;
-  cell_t datap = 0x64 * sizeof(cell_t) - sizeof(cell_t);
+  IP = 0x100;
 
   int TTIB=BUFFER("'TIB", 0x100);
   int CONTEXT=VARIABLE("CONTEXT");
@@ -510,7 +506,6 @@ int main(void) {
   int NTIB=VARIABLE("#TIB");
   int TEMP=VARIABLE("tmp");
   int BASE=VARIABLE("BASE");
-  SET_VAR(BASE, 10); 
 
 #define X(sname, name, code) name = CODE(sname, as_ ## name, as_NEXTT);
   PRIMITIVE_LIST
@@ -730,30 +725,19 @@ int main(void) {
   int PAREN=COLON_IMMEDIATE("(", DOLIT,')',PARSE,DDROP,EXIT);
   int ONLY=COLON_IMMEDIATE("COMPILE-ONLY", DOLIT,COMPO,LAST,AT,PSTORE,EXIT);
   int IMMED=COLON("IMMEDIATE", DOLIT,IMEDD,LAST,AT,PSTORE,EXIT);
+
   SET_VAR(CP, IP);
+  SET_VAR(BASE, 10); 
   SET_VAR(TEVAL, INTER);
   SET_VAR(TABORT, EVAL);
-  SET_VAR(CONTEXT, IMMED - WithPadding(10));
-  SET_VAR(LAST, IMMED - WithPadding(10));
+  SET_VAR(CONTEXT, links);
+  SET_VAR(LAST, links);
 
 #if DEBUG_COREWORDS
-  printf("\n");
-  printf("IP=");
-  printf("%" PRIxCELL, IP);
-  printf(" R-stack= ");
-  printf("%" PRIxCELL, popR*sizeof(cell_t));
+  CheckSum();
 #endif
 
-#if DEBUG_COREWORDS
-  // dump dictionary
-  IP=0;
-  for (len=0;len<0x48 * sizeof(cell_t);len++) {
-    CheckSum();
-  }
-  printf("\n");
-#endif
-
-  setpin(13, 0);
+  setpin(13, 0);  // Indicate successful boot.
   run();
 }
 
