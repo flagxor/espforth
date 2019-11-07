@@ -1,4 +1,4 @@
-// esp32 Forth, based on Version 6.3
+// AIBOT esp32 Forth, based on Version 6.3 by CH Ting
 
 #include <assert.h>
 #include <stdio.h>
@@ -86,13 +86,15 @@ typedef uint64_t udcell_t;
 # define  popR rack[(unsigned char)R--]
 # define  pushR rack[(unsigned char)++R]
 
-cell_t rack[256] = {0};
-cell_t stack[256] = {0};
-unsigned char R=0, S=0;
-cell_t* Pointer ;
-cell_t  P, IP, WP, top, links, len ;
-uint8_t* cData ;
-dcell_t d, n, m ;
+static cell_t rack[256] = {0}, stack[256] = {0};
+static unsigned char R=0, S=0;
+static cell_t* Pointer;
+static cell_t  P, IP, WP, top, links, len;
+static uint8_t* cData;
+static dcell_t d, n, m ;
+static cell_t data[16000] = {};
+static const int IMEDD=0x80;
+static const int COMPO=0x40;
 
 #define PRIMITIVE_LIST \
   X("NOP", NOP, next()) \
@@ -220,14 +222,10 @@ dcell_t d, n, m ;
   X("MS", MS, WP = top; pop; mspause(WP)) \
   X("TERMINATE", TERMINATE, exit(top))
 
-static int ABORQP=0, DOTQP=0, STRQP = 0;
+static int ABORQP=0, DOTQP=0, STRQP = 0, COLD = 0;
 #define X(sname, name, code) static int name = 0;
   PRIMITIVE_LIST
 #undef X
-
-cell_t data[16000] = {};
-int IMEDD=0x80;
-int COMPO=0x40;
 
 static void HEADER_WITH_FLAGS(int flags, const char *name) {
   P=IP/sizeof(cell_t);
@@ -479,36 +477,12 @@ static int CONSTANT(const char *name, cell_t n) {
   return ret;
 }
 
-void evaluate()
-{
+static void run() {
+  P = COLD;
+  WP = P + sizeof(cell_t);
   for(;;) {
     unsigned char bytecode = cData[P++];
-#if 0
-    printf("[%d]%d: [%d] %d %d %d %d %d | [%d] %d %d %d %d %d\n",
-      (int)P, bytecode,
-      (int)S,
-      (int)stack[0], (int)stack[1], (int)stack[2], (int)stack[3], (int)stack[4],
-      (int)R,
-      (int)rack[0], (int)rack[1], (int)rack[2], (int)rack[3], (int)rack[4]);
-#endif
-    if (bytecode) primitives[bytecode]();
-    else break;
-  }
-}
-
-static void run() {
-  printf("AIBOT\n");
-  // TODO: Find better way to start in decimal.
-  strcpy((char*) cData, "decimal");
-  len = strlen((char*) cData);
-  for (;;) {
-    data[0x66] = 0;                   // >IN
-    data[0x67] = len;                 // #TIB
-    data[0x68] = 0;                   // 'TIB
-    P = 0x60 * sizeof(cell_t);        // EVAL
-    WP = P + sizeof(cell_t);
-    evaluate();
-    len = duplexread(cData, 255);
+    primitives[bytecode]();
   }
 }
 
@@ -677,7 +651,7 @@ int main(void) {
                     RFROM,DUP,DOT,DOTQ," ok>",THEN,EXIT);
   int EVAL=COLON("EVAL", LBRAC,BEGIN,TOKEN,DUP,AT,WHILE,TEVAL,ATEXE,
                  REPEAT,DROP,DOTOK,NOP,EXIT);
-  int QUITT=COLON("QUIT", LBRAC,BEGIN,QUERY,EVAL,AGAIN,EXIT);
+  int QUIT=COLON("QUIT", LBRAC,BEGIN,QUERY,EVAL,AGAIN,EXIT);
   int LOAD=COLON("LOAD", NTIB,STORE,TTIB,STORE,DOLIT,0,INN,STORE,EVAL,EXIT);
   int COMMA=COLON(",", HERE,DUP,CELLP,CP,STORE,STORE,EXIT);
   int LITER=COLON_IMMEDIATE("LITERAL", DOLIT,DOLIT,COMMA,COMMA,EXIT);
@@ -714,7 +688,8 @@ int main(void) {
   int FORGT=COLON("FORGET", TOKEN,NAMEQ,QDUP,IF,
     CELLM,DUP,CP,STORE,AT,DUP,CNTXT,STORE,LAST,STORE,DROP,EXIT,THEN,
     ERRORR,EXIT);
-  int COLD=COLON("COLD",CR,DOTQ,"esp32forth V6.3, 2019 ",CR,EXIT);
+  COLD=COLON(
+    "COLD",DOTQ,"AIBOT ESP32 Forth",CR,DOTOK,BEGIN,QUIT,AGAIN,EXIT);
   int LINE=COLON("LINE",
     DOLIT,0x7,FOR,DUP,PEEK,DOLIT,0x9,UDOTR,CELLP,NEXT,EXIT);
   int PP=COLON("PP",
@@ -774,15 +749,14 @@ int main(void) {
   printf(" R-stack= ");
   printf("%" PRIxCELL, popR*sizeof(cell_t));
 #endif
-  IP = 0x60 * sizeof(cell_t);
-  int USER=LABEL(18,
-                 as_DOLIST,EVAL,0,0,
+  IP = 0x64 * sizeof(cell_t);
+  int USER=LABEL(14,
                  0,  // HLD
                  0,  // SPAN
                  0,  // >IN
                  0,  // #TIB
                  0,  // 'TIB
-                 0x10,  // BASE
+                 10,  // BASE
                  IMMED-WithPadding(10), // CONTEXT
                  ENDD,  // CP
                  IMMED-WithPadding(10), // LAST
