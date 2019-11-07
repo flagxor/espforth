@@ -409,12 +409,6 @@ static int CONSTANT(const char *name, cell_t n) {
   return ret;
 }
 
-static int BUFFER(const char *name, cell_t len) {
-  int ret = CODE(name, as_DOVAR, as_NEXTT);
-  IP += len;
-  return ret;
-}
-
 static int VARIABLE(const char *name) {
   int ret = CODE(name, as_DOVAR, as_NEXTT);
   Comma(0);
@@ -484,7 +478,7 @@ int main(void) {
   links = 0;
   IP = 0x100;
 
-  int TTIB=BUFFER("'TIB", 0x100);
+  int TTIB=VARIABLE("'TIB"); IP += 0x100;
   int CONTEXT=VARIABLE("CONTEXT");
   int CP=VARIABLE("CP");
   int LAST=VARIABLE("LAST");
@@ -501,7 +495,7 @@ int main(void) {
   PRIMITIVE_LIST
 #undef X
 
-  int BLANK=CONSTANT("BL", 32);
+  int BLANK=CONSTANT("BL", ' ');
   CONSTANT("CELL", sizeof(cell_t));
   int CELLP=CODE("CELL+", as_DOCON, as_PLUS, as_NEXTT); Comma(sizeof(cell_t));
   int CELLM=CODE("CELL-", as_DOCON, as_SUB, as_NEXTT); Comma(sizeof(cell_t));
