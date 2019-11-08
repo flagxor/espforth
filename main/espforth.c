@@ -21,7 +21,10 @@
 #  include "driver/ledc.h"
 #  include "esp_spi_flash.h"
 #  include "esp_err.h"
+#  include "esp_vfs.h"
 #  include "esp_vfs_dev.h"
+#  include "esp_vfs_fat.h"
+#  include "esp_system.h"
 #  include "driver/uart.h"
 #else
 #  include <termios.h>
@@ -67,6 +70,16 @@ static cell_t data[16000] = {};
 static uint8_t *cData = (uint8_t *) data;
 static const int IMEDD=0x80;
 static const int COMPO=0x40;
+
+#ifdef esp32
+mode_t umask(mode_t v) {
+  return 0777;
+}
+int ftruncate(int fd, off_t sz) {
+  errno = EINVAL;
+  return -1;
+}
+#endif
 
 #define PRIMITIVE_LIST \
   X("NOP", NOP, next()) \
@@ -464,27 +477,38 @@ static void run() {
 }
 
 #ifdef esp32
-esp_err_t example_configure_stdin_stdout(void)
-{
-    // Initialize VFS & UART so we can use std::cout/cin
-    setvbuf(stdin, NULL, _IONBF, 0);
-    setvbuf(stdout, NULL, _IONBF, 0);
-    /* Install UART driver for interrupt-driven reads and writes */
-    ESP_ERROR_CHECK( uart_driver_install( (uart_port_t)CONFIG_CONSOLE_UART_NUM,
-            256, 0, 0, NULL, 0) );
-    /* Tell VFS to use UART driver */
-    esp_vfs_dev_uart_use_driver(CONFIG_CONSOLE_UART_NUM);
-    esp_vfs_dev_uart_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
-    /* Move the caret to the beginning of the next line on '\n' */
-    esp_vfs_dev_uart_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
-    return ESP_OK;
+#define BOOT_PATH "/spiflash/boot.fs"
+static wl_handle_t s_wl_handle = WL_INVALID_HANDLE;
+static void Init(void) {
+  const char *base_path = "/spiflash";
+
+  setvbuf(stdin, NULL, _IONBF, 0);
+  setvbuf(stdout, NULL, _IONBF, 0);
+  ESP_ERROR_CHECK( uart_driver_install( (uart_port_t)CONFIG_CONSOLE_UART_NUM,
+          256, 0, 0, NULL, 0) );
+  esp_vfs_dev_uart_use_driver(CONFIG_CONSOLE_UART_NUM);
+  esp_vfs_dev_uart_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+  esp_vfs_dev_uart_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+
+  const esp_vfs_fat_mount_config_t mount_config = {
+      .max_files = 4,
+      .format_if_mount_failed = true,
+      .allocation_unit_size = CONFIG_WL_SECTOR_SIZE
+  };
+  esp_err_t err = esp_vfs_fat_spiflash_mount(
+    base_path, "storage", &mount_config, &s_wl_handle);
+  if (err != ESP_OK) {
+    fprintf(stderr, "Failed to mount FATFS (%s)", esp_err_to_name(err));
+    return;
+  }
 }
 #else
+#define BOOT_PATH "boot.fs"
 static struct termios terminalOld;
 static void RestoreTerminal(void) {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminalOld);
 }
-static void SetupTerminal(void) {
+static void Init(void) {
   setvbuf(stdin, NULL, _IONBF, 0);
   setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -502,11 +526,7 @@ void app_main(void) {
 #else
 int main(void) {
 #endif
-#ifdef esp32
-  example_configure_stdin_stdout();
-#else
-  SetupTerminal();
-#endif
+  Init();
   S = 0;
   R = 0;
   top = 0;
@@ -702,7 +722,7 @@ int main(void) {
   COLON("FORGET", TOKEN,NAMEQ,QDUP,IF,
     CELLM,DUP,CP,STORE,AT,DUP,CONTEXT,STORE,LAST,STORE,DROP,EXIT,THEN,
     ERRORR,EXIT);
-  int BOOT=COLON("BOOT", STRQ,"boot.fs",COUNT,R_O,OPEN_FILE,IF,DROP,ELSE,
+  int BOOT=COLON("BOOT", STRQ,BOOT_PATH,COUNT,R_O,OPEN_FILE,IF,DROP,ELSE,
     FIB,SWAP,DOLIT,NFIB,AT,SWAP,READ_FILE,
     IF,DROP,ELSE,FIB,SWAP,LOAD,THEN,THEN,EXIT);
   COLD=COLON("COLD",
@@ -762,7 +782,7 @@ int main(void) {
   COLON("IMMEDIATE", DOLIT,IMEDD,LAST,AT,PSTORE,EXIT);
 
   SET_VAR(CP, IP);
-  SET_VAR(BASE, 10); 
+  SET_VAR(BASE, 10);
   SET_VAR(TEVAL, INTER);
   SET_VAR(TABORT, EVAL);
   SET_VAR(CONTEXT, links);
