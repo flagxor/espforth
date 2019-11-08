@@ -9,9 +9,10 @@
 #include <inttypes.h>
 
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
+#include <sys/select.h>
 
 #ifdef esp32
 #  include "freertos/FreeRTOS.h"
@@ -57,7 +58,7 @@ typedef uint64_t udcell_t;
 #define LOGICAL ? TRUE : FALSE
 #define LOWER(x,y) ((ucell_t)(x)<(ucell_t)(y))
 #define pop top = stack[(unsigned char)S--]
-#define push stack[(unsigned char)++S] = top; top =
+#define push stack[(unsigned char)++S] = top, top =
 #define popR rack[(unsigned char)R--]
 #define pushR rack[(unsigned char)++R]
 
@@ -84,7 +85,7 @@ int ftruncate(int fd, off_t sz) {
 #define PRIMITIVE_LIST \
   X("NOP", NOP, next()) \
   X("ACCEPT", ACCEPT, top = duplexread(cData, top)) \
-  X("?KEY", QKEY, push fgetc(stdin); push -1) \
+  X("?KEY", QKEY, push qrx(); if (top >= 0) push -1; else top = 0) \
   X("EMIT", EMIT, char c=top; fputc(c, stdout); pop) \
   X("DOCON", DOCON, push data[WP/sizeof(cell_t)]) \
   X("DOLIT", DOLIT, push data[IP/sizeof(cell_t)]; \
@@ -335,6 +336,20 @@ static void next(void) {
   WP = P+sizeof(cell_t);
 }
 
+static int qrx(void) {
+  fd_set readfds;
+  FD_ZERO(&readfds);
+  FD_SET(STDIN_FILENO, &readfds);
+  struct timeval tm;
+  tm.tv_sec = 0;
+  tm.tv_usec = 0;
+  int ret = select(1, &readfds, NULL, NULL, &tm);
+  if (ret > 0) {
+    return fgetc(stdin);
+  }
+  return -1;
+}
+
 static int duplexread(unsigned char* dst, int sz) {
   int len = 0;
   while (sz > 0) {
@@ -371,6 +386,8 @@ static void setpin(int p, int level) {
 static void mspause(cell_t ms) {
 #ifdef esp32
   vTaskDelay(ms / portTICK_PERIOD_MS);
+#else
+  usleep(ms * 1000);
 #endif
 }
 
