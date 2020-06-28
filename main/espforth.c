@@ -243,6 +243,7 @@ static char filename[4096];
 #undef X
 
 static void HEADER(int flags, const char *name) {
+  assert(IP % sizeof(cell_t) == 0);
   P=IP/sizeof(cell_t);
   int i;
   int len = strlen(name) & 0x1f;
@@ -250,7 +251,7 @@ static void HEADER(int flags, const char *name) {
   IP=P*sizeof(cell_t);
 #if DEBUG_CORE_WORDS
   printf("\n");
-  printf("%" PRIxCELL, links);
+  printf("[%" PRIxCELL "]", links);
   for (i=links/sizeof(cell_t);i<P;i++) {
     printf(" ");
     printf("%" PRIxCELL, data[i]);
@@ -267,8 +268,9 @@ static void HEADER(int flags, const char *name) {
 #if DEBUG_CORE_WORDS
   printf("\n");
   printf("%s", name);
-  printf(" ");
+  printf(" (at: ");
   printf("%" PRIxCELL, IP);
+  printf(") ");
 #endif
 }
 
@@ -412,6 +414,9 @@ int CODE(const char *name, ... ) {
   HEADER(0, name);
   int addr=IP;
   cell_t s;
+#if DEBUG_CORE_WORDS
+    printf(" CODE:");
+#endif
   va_list argList;
   va_start(argList, name);
   do {
@@ -591,7 +596,7 @@ int main(void) {
   int WITHI=COLON("WITHIN", OVER,SUB,TOR,SUB,RFROM,ULESS,EXIT);
   int TCHAR=COLON(">CHAR", DOLIT,0x7F,AND,DUP,DOLIT,127,BLANK,WITHI,
     IF, DROP,DOLIT,'_', THEN, EXIT);
-  int ALIGN=COLON("ALIGNED", DOLIT,CELL_MASK,PLUS, DOLIT,~CELL_MASK,AND,EXIT);
+  int ALIGN=COLON("ALIGNED", DOLIT,CELL_MASK,PLUS, DOLIT,CELL_MASK,INVERSE,AND,EXIT);
   int HERE=COLON("HERE", CP,AT,EXIT);
   int PAD=COLON("PAD", HERE,DOLIT,80,PLUS,EXIT);
   int TIB=COLON("TIB", TTIB,AT,EXIT);
@@ -615,7 +620,8 @@ int main(void) {
   int STRR=COLON("str", DUP,TOR,ABS,BDIGS,DIGS,RFROM,SIGN,EDIGS,EXIT);
   int HEX=COLON("HEX", DOLIT,16,BASE,STORE,EXIT);
   COLON("DECIMAL", DOLIT,10,BASE,STORE,EXIT);
-  int UPPER=COLON("wupper", DOLIT,UPPER_MASK,AND,EXIT);
+  int UMASK = CONSTANT("UMASK", UPPER_MASK);
+  int UPPER=COLON("wupper", UMASK,AND,EXIT);
   int TOUPP=COLON(">upper", DUP,DOLIT,'a',DOLIT,'{',WITHI,IF,
                             DOLIT,0x5F,AND,THEN,EXIT);
   int DIGTQ=COLON("DIGIT?", TOR,TOUPP,DOLIT,'0',SUB,DOLIT,9,OVER,LESS,
@@ -663,22 +669,57 @@ int main(void) {
                             ELSE,RFROM,DROP,DUP,ONEP,TOR,
                             THEN,OVER,SUB,RFROM,RFROM,SUB,EXIT,
                             THEN,OVER,RFROM,SUB,EXIT);
-  int PACKS=COLON("PACK$", DUP,TOR,DDUP,PLUS,DOLIT,~CELL_MASK,AND,
+  // : PACK$
+  //     dup >r 2dup + CELL_MASK and 0 swap ! 2dup c! 1+ swap cmove r>
+  // ;
+  int PACKS=COLON("PACK$", DUP,TOR,DDUP,PLUS,DOLIT,CELL_MASK,INVERSE,AND,
     DOLIT,0,SWAP,STORE,DDUP,CSTORE,ONEP,SWAP,CMOVEE,RFROM,EXIT);
   int PARSE=COLON("PARSE", TOR,TIB,INN,AT,PLUS,NTIB,AT,INN,AT,SUB,RFROM,
     PARS,INN,PSTORE,EXIT);
   int TOKEN=COLON("TOKEN",
     BLANK,PARSE,DOLIT,0x1F,MIN,HERE,CELLP,PACKS,EXIT);
   int WORDD=COLON("WORD", PARSE,HERE,CELLP,PACKS,EXIT);
+  // : NAMET
+  //     count $1f and + align
+  // ;
   int NAMET=COLON("NAME>", COUNT,DOLIT,0x1F,AND,PLUS,ALIGN,EXIT);
+  // : SAME?
+  //     $1f and cell/
+  //     for aft
+  //         over r@ cells + @ wupper over r@ cells + @ wupper - ?dup
+  //         if
+  //             r> drop exit
+  //         then
+  //     then next
+  //     0
+  // ;
   int SAMEQ=COLON("SAME?", DOLIT,0x1F,AND,CELLD,FOR,AFT,
                              OVER,RAT,CELLS,PLUS,AT,UPPER,OVER,RAT,
                              CELLS,PLUS,AT,UPPER,SUB,QDUP,IF,
                                RFROM,DROP,EXIT,THEN,
                            THEN,NEXT,DOLIT,0,EXIT);
+  // : FIND
+  //     swap dup @ temp ! dup @ >r cell+ swap
+  //     begin
+  //         @ dup
+  //         if
+  //             dup @ ~$C0 and wupper r@ wupper xor
+  //             if
+  //                 cell+ -1
+  //             else
+  //                 cell+ temp @ same?
+  //             then
+  //         else
+  //             r> drop swap cell- swap exit
+  //         then
+  //     while
+  //          cell- cell-
+  //     repeat
+  //     r> drop swap drop cell- dup namet swap
+  // ;
   int FIND=COLON("find", SWAP,DUP,AT,TEMP,STORE,DUP,AT,TOR,CELLP,SWAP,
                          BEGIN,AT,DUP,IF,
-                           DUP,AT,DOLIT,~0xC0,AND,UPPER,RAT,UPPER,XOR,
+                           DUP,AT,DOLIT,0xC0,INVERSE,AND,UPPER,RAT,UPPER,XOR,
                            IF,CELLP,DOLIT,-1,ELSE,CELLP,TEMP,AT,SAMEQ,THEN,
                          ELSE,RFROM,DROP,SWAP,CELLM,SWAP,EXIT,THEN,
                          WHILE,CELLM,CELLM,REPEAT,
