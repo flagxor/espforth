@@ -15,3 +15,8 @@
    then
    op_dolist , compile r> [compile] ]
 ; immediate
+
+: SEE
+   ' BEGIN CELL+ DUP @ DUP IF >NAME THEN ?DUP
+   IF SPACE .ID ELSE DUP @ U. THEN DUP @ ['] EXIT =
+   UNTIL DROP ;
