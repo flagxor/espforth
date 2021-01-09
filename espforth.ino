@@ -1086,8 +1086,8 @@ void setup() {
   cData = (uint8_t *) data;
   Serial.begin(115200);
   delay(100);
-  WiFi.config(ip, gateway, subnet);
-//  WiFi.mode(WIFI_STA);
+//  WiFi.config(ip, gateway, subnet);
+  WiFi.mode(WIFI_STA);
 // attempt to connect to Wifi network:
   WiFi.begin(ssid, pass);
   while (WiFi.status() != WL_CONNECTED) {
